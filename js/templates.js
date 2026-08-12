@@ -66,22 +66,59 @@
     return Math.sqrt(dx * dx + dy * dy + dz * dz);
   }
 
+  // ===== 質感ミックス(60-30-10) ==========================================
+  // 位置で決まる決定的ハッシュ。縞にならないよう散らす。
+  function hash01(x, y, z, seed) {
+    var h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263) + Math.imul(z | 0, 2246822519) + Math.imul(seed | 0, 3266489917)) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return h / 4294967296;
+  }
+  // mix = [[id,重み],...] を重み付き抽選
+  function pickMix(mix, r) {
+    if (!mix || !mix.length) return 0;
+    var total = 0, i; for (i = 0; i < mix.length; i++) total += mix[i][1];
+    var t = r * total;
+    for (i = 0; i < mix.length; i++) { t -= mix[i][1]; if (t <= 0) return mix[i][0]; }
+    return mix[mix.length - 1][0];
+  }
+  function resolveMix(mix, ver) {
+    if (!mix) return null;
+    var out = [];
+    for (var i = 0; i < mix.length; i++) { var id = resolve(mix[i][0], ver); if (id) out.push([id, mix[i][1]]); }
+    return out.length ? out : null;
+  }
+  // 外周リングを配合で埋める
+  function ringFillMix(bp, y, x0, z0, x1, z1, mix, seed) {
+    var cells = perimeterCells(x0, z0, x1, z1);
+    for (var i = 0; i < cells.length; i++)
+      M.setSafe(bp, cells[i][0], y, cells[i][1], pickMix(mix, hash01(cells[i][0], y, cells[i][1], seed)));
+  }
+
   // ===== スタイル(材料プリセット) =========================================
   // 役割: wall(=漆喰/壁面) / floor / roof / pillar(=柱・梁の木材) / glass / accent
   // 装飾フラグ: framing 木組み / foundation 石の土台id / foundationH 段数 / chimney 煙突 / overhang 軒の出
   var STYLE_PRESETS = {
-    '和風':       { wall: 15, floor: 12, roof: 39, pillar: 11, glass: 4, accent: 1,  roofShape: 'japanese' },
-    'モダン':     { wall: 34, floor: 33, roof: 35, pillar: 32, glass: 4, accent: 36, roofShape: 'flat' },
-    '西洋':       { wall: 14, floor: 3,  roof: 5,  pillar: 10, glass: 4, accent: 2,  roofShape: 'gable' },
-    'サバイバル': { wall: 3,  floor: 3,  roof: 2,  pillar: 2,  glass: 4, accent: 6,  roofShape: 'gable' },
-    'デフォルト': { wall: 3,  floor: 3,  roof: 2,  pillar: 10, glass: 4, accent: 2,  roofShape: 'gable' },
+    '和風':       { wall: 15, floor: 12, roof: 39, pillar: 11, glass: 4, accent: 1,  roofShape: 'japanese',
+                    wallMix: [[15, 85], [70, 15]], foundMix: [[1, 60], [2, 30], [67, 10]] },
+    'モダン':     { wall: 34, floor: 33, roof: 35, pillar: 32, glass: 4, accent: 36, roofShape: 'flat',
+                    wallMix: [[34, 70], [35, 22], [33, 8]], foundMix: [[33, 60], [35, 25], [1, 15]] },
+    '西洋':       { wall: 14, floor: 3,  roof: 5,  pillar: 10, glass: 4, accent: 2,  roofShape: 'gable',
+                    wallMix: [[14, 60], [2, 25], [66, 10], [67, 5]], foundMix: [[2, 55], [67, 25], [14, 15], [66, 5]] },
+    'サバイバル': { wall: 3,  floor: 3,  roof: 2,  pillar: 2,  glass: 4, accent: 6,  roofShape: 'gable',
+                    wallMix: [[3, 70], [2, 20], [10, 10]], foundMix: [[2, 70], [1, 20], [67, 10]] },
+    'デフォルト': { wall: 3,  floor: 3,  roof: 2,  pillar: 10, glass: 4, accent: 2,  roofShape: 'gable',
+                    wallMix: [[3, 70], [2, 20], [14, 10]], foundMix: [[2, 70], [1, 20], [67, 10]] },
     // オシャレ建築(木組み・中世・コテージ)
     '中世ファンタジー': { wall: 69, floor: 64, roof: 68, pillar: 11, glass: 4, accent: 14,
-                          roofShape: 'gable', framing: true, foundation: 2, foundationH: 2, chimney: true, overhang: 1 },
+                          roofShape: 'gable', framing: true, foundation: 2, foundationH: 2, chimney: true, overhang: 1,
+                          wallMix: [[69, 80], [70, 20]], foundMix: [[2, 55], [67, 25], [14, 15], [66, 5]] },
     'コテージ':         { wall: 15, floor: 3,  roof: 68, pillar: 10, glass: 4, accent: 2,
-                          roofShape: 'gable', framing: true, foundation: 2, foundationH: 1, chimney: true, overhang: 1 },
+                          roofShape: 'gable', framing: true, foundation: 2, foundationH: 1, chimney: true, overhang: 1,
+                          wallMix: [[15, 82], [70, 18]], foundMix: [[2, 55], [67, 30], [14, 15]] },
     '山小屋':           { wall: 64, floor: 64, roof: 63, pillar: 63, glass: 4, accent: 67,
-                          roofShape: 'aframe', framing: true, foundation: 67, foundationH: 1, chimney: true, overhang: 1 }
+                          roofShape: 'aframe', framing: true, foundation: 67, foundationH: 1, chimney: true, overhang: 1,
+                          wallMix: [[64, 70], [12, 20], [10, 10]], foundMix: [[67, 50], [2, 35], [66, 15]] }
   };
   function styleOf(name) { return STYLE_PRESETS[name] || STYLE_PRESETS['デフォルト']; }
 
@@ -295,6 +332,9 @@
     var foundBlk = st.foundation ? resolve(st.foundation, ver) : 0;
     var foundH = Math.min(st.foundationH || 0, floorH - 1);
     var oh = st.overhang != null ? st.overhang : roofOverhang(roofShape);
+    var seed = opts.seed != null ? opts.seed : 7;
+    var wallMix = resolveMix(st.wallMix, ver) || [[wall, 100]];
+    var foundMix = resolveMix(st.foundMix, ver) || (foundBlk ? [[foundBlk, 100]] : null);
 
     // 軒の張り出し + 巾木ぶんキャンバスを広げ、壁を内側にオフセット(凹凸のため)
     var pad = Math.max(oh, foundBlk ? 1 : 0);
@@ -308,12 +348,12 @@
 
     // 各階の床スラブ
     for (var f = 0; f < floors; f++) fillRect(bp, f * floorH, bx0, bz0, bx1, bz1, floor);
-    // 壁(漆喰/壁面)
-    for (var y = 1; y < baseY; y++) ringFill(bp, y, bx0, bz0, bx1, bz1, wall);
+    // 壁(質感ミックスで散らす → のっぺり防止)
+    for (var y = 1; y < baseY; y++) ringFillMix(bp, y, bx0, bz0, bx1, bz1, wallMix, seed);
     // 石の土台 + 1マス張り出した巾木(凹凸)
-    if (foundBlk && foundH) {
-      for (var yf = 1; yf <= foundH; yf++) ringFill(bp, yf, bx0, bz0, bx1, bz1, foundBlk);
-      if (pad >= 1) ringFill(bp, 1, bx0 - 1, bz0 - 1, bx1 + 1, bz1 + 1, foundBlk); // 張り出し巾木
+    if (foundMix && foundH) {
+      for (var yf = 1; yf <= foundH; yf++) ringFillMix(bp, yf, bx0, bz0, bx1, bz1, foundMix, seed + 101);
+      if (pad >= 1) ringFillMix(bp, 1, bx0 - 1, bz0 - 1, bx1 + 1, bz1 + 1, foundMix, seed + 101); // 張り出し巾木
     }
 
     var sillY = foundH > 0 ? foundH + 1 : 1;
@@ -424,12 +464,13 @@
   }
 
   function addWindows(bp, wy, x0, z0, x1, z1, glass, wall, frame, awning, pad) {
+    function isWall(id) { return id !== 0 && id !== frame && id !== glass; }
     function put(x, z, front) {
-      if (M.get(bp, x, wy, z) !== wall) return; // 漆喰面のみ
+      if (!isWall(M.get(bp, x, wy, z))) return; // 壁面のみ
       M.setSafe(bp, x, wy, z, glass);
       if (frame) {
-        if (M.get(bp, x, wy + 1, z) === wall) M.setSafe(bp, x, wy + 1, z, frame);
-        if (M.get(bp, x, wy - 1, z) === wall) M.setSafe(bp, x, wy - 1, z, frame);
+        if (isWall(M.get(bp, x, wy + 1, z))) M.setSafe(bp, x, wy + 1, z, frame);
+        if (isWall(M.get(bp, x, wy - 1, z))) M.setSafe(bp, x, wy - 1, z, frame);
       }
       // 正面窓の下に張り出す庇(凹凸)
       if (front && pad >= 1 && awning) M.setSafe(bp, x, wy - 1, z - 1, awning);
@@ -448,7 +489,7 @@
     var o = {
       X: opts.X, D: opts.D, floors: Math.max(2, opts.floors || 4),
       style: opts.style || 'モダン', roofShape: opts.roofShape || 'flat',
-      windows: true, purpose: 'none', version: opts.version
+      windows: true, purpose: 'none', version: opts.version, seed: opts.seed
     };
     var bp = house(o);
     bp.name = 'ビル(' + o.floors + '階)';
@@ -460,7 +501,7 @@
     var bp = house({
       X: opts.X || 6, D: opts.D || 5, floors: 1,
       style: opts.style || 'サバイバル', roofShape: opts.roofShape || 'gable',
-      windows: true, purpose: opts.purpose || 'kyoten', version: opts.version
+      windows: true, purpose: opts.purpose || 'kyoten', version: opts.version, seed: opts.seed
     });
     bp.name = '小屋';
     return bp;
@@ -735,7 +776,7 @@
   function inn(opts) {
     var ver = opts.version || '1.21';
     var bp = house({ X: opts.X || 13, D: opts.D || 9, floors: 2, style: '中世ファンタジー',
-      roofShape: 'gable', windows: true, purpose: opts.purpose || 'none', details: true, version: ver });
+      roofShape: 'gable', windows: true, purpose: opts.purpose || 'none', details: true, version: ver, seed: opts.seed });
     var wood = resolve(11, ver), sign = resolve(3, ver);
     var y = 8;
     M.setSafe(bp, 2, y, 0, wood); M.setSafe(bp, 2, y + 1, 1, wood);

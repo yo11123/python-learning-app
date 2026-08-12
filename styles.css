@@ -42,6 +42,7 @@ button:hover { background: #26303e; }
 button.on { background: var(--accent2); border-color: var(--accent2); color: #fff; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #08210f; font-weight: 700; width: 100%; margin-top: 6px; }
 button.primary:hover { filter: brightness(1.08); }
+#btnSurprise { width: 100%; margin-top: 6px; }
 select, input[type=number] {
   background: var(--panel2); border: 1px solid var(--border); color: var(--text);
   padding: 5px 6px; border-radius: 6px;

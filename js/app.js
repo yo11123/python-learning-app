@@ -8,7 +8,7 @@
 
   var state = {
     bp: null, curY: 0, tool: 'pencil', selectedBlock: 3,
-    rot: 0, zoom: 1, pan: { x: 0, y: 0 }, onion: true, version: '1.21'
+    rot: 0, zoom: 1, pan: { x: 0, y: 0 }, onion: true, version: '1.21', seed: 7
   };
   var el = {};
   var fieldVals = {};
@@ -136,6 +136,7 @@
     });
     el.typeSel.addEventListener('change', function () { renderTypeFields(el.typeSel.value); });
     $('btnGen').addEventListener('click', function () { generate(true); });
+    var bs = $('btnSurprise'); if (bs) bs.addEventListener('click', surprise);
 
     // ツール
     document.querySelectorAll('#tools [data-tool]').forEach(function (btn) {
@@ -204,10 +205,31 @@
     var opts = {};
     for (var k in fieldVals) opts[k] = fieldVals[k];
     opts.version = state.version;
+    opts.seed = state.seed;
     var bp = T.gen(el.typeSel.value, opts);
     if (!bp) return;
     setBlueprint(bp, true);
     el.genNote.textContent = MCBP._note || '';
+  }
+
+  // おまかせ生成: シード + スタイル/屋根をランダム化して毎回違う建物に
+  function surprise() {
+    state.seed = Math.floor(Math.random() * 1e9);
+    var t = T.byKey(el.typeSel.value);
+    if (t) {
+      var rows = el.typeFields.querySelectorAll('.field');
+      t.fields.forEach(function (f, idx) {
+        var val = null;
+        if (f.type === 'style') val = T.STYLE_OPTIONS[Math.floor(Math.random() * T.STYLE_OPTIONS.length)].v;
+        else if (f.type === 'roof') val = T.ROOF_OPTIONS[Math.floor(Math.random() * T.ROOF_OPTIONS.length)].v;
+        if (val != null) {
+          fieldVals[f.key] = val;
+          var sel = rows[idx] && rows[idx].querySelector('select');
+          if (sel) sel.value = val;
+        }
+      });
+    }
+    generate(true);
   }
 
   function setBlueprint(bp, doFit) {

@@ -94,6 +94,16 @@
       ok('鐘楼: 鐘(金)あり', has(T.gen('belltower', { W: 5, H: 18, version: '1.21' }), 27));
       ok('露店: 生成', M.totalSolid(T.gen('stall', { W: 5, D: 4, version: '1.21' })) > 0);
       ok('宿屋: 生成', M.totalSolid(T.gen('inn', { X: 13, D: 9, version: '1.21' })) > 0);
+      // 質感ミックス(60-30-10)
+      var seiyou = T.gen('house', { X: 13, D: 9, floors: 2, style: '西洋', version: '1.21' });
+      ok('質感ミックス: 壁に複数の石系ブロック', has(seiyou, 14) && has(seiyou, 2) && (has(seiyou, 66) || has(seiyou, 67)));
+      ok('おまかせ: シードで質感が変わる', (function () {
+        var a = T.gen('house', { X: 13, D: 9, floors: 2, style: '西洋', seed: 1 });
+        var b2 = T.gen('house', { X: 13, D: 9, floors: 2, style: '西洋', seed: 999 });
+        for (var y = 1; y < a.dims.y; y++) for (var z = 0; z < a.dims.z; z++) for (var x = 0; x < a.dims.x; x++)
+          if (M.get(a, x, y, z) !== M.get(b2, x, y, z)) return true;
+        return false;
+      })());
 
       // 全タイプ生成
       T.TYPES.forEach(function (t) {
