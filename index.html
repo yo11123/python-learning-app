@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>マインクラフト設計図メーカー</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>⛏️ マインクラフト設計図メーカー</h1>
+    <div class="top-controls">
+      <input id="bpName" type="text" placeholder="設計図の名前" title="設計図の名前">
+      <label class="ver">対応バージョン
+        <select id="verSel" title="使えるブロックを絞り込みます"></select>
+      </label>
+      <div class="top-btns">
+        <button id="btnNew" title="新規作成">新規</button>
+        <button id="btnSaveJSON" title="JSONで保存">JSON保存</button>
+        <button id="btnLoad" title="JSONを読み込み">読み込み</button>
+        <button id="btnPNG3D" title="3DプレビューをPNGで保存">PNG(3D)</button>
+        <button id="btnPNGLayers" title="層ごとの平面図をPNGで保存">PNG(層)</button>
+        <button id="btnText" title="テキストで書き出し">テキスト</button>
+      </div>
+      <input id="fileInput" type="file" accept=".json,application/json" hidden>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- 左サイドバー -->
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>テンプレート生成</h2>
+        <div class="field"><label>建物タイプ</label><select id="typeSel"></select></div>
+        <div id="typeFields"></div>
+        <button id="btnGen" class="primary">この設定で生成</button>
+        <button id="btnSurprise" title="スタイル・屋根・質感をランダムに変えて生成">🎲 おまかせ生成</button>
+        <p id="genNote" class="note"></p>
+      </section>
+
+      <section class="panel">
+        <h2>ツール</h2>
+        <div id="tools" class="tool-row">
+          <button data-tool="pencil" class="on">✏️ えんぴつ</button>
+          <button data-tool="eraser">🩹 消しゴム</button>
+          <button data-tool="bucket">🪣 バケツ</button>
+          <button data-tool="rect">▭ 四角</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>ブロックパレット</h2>
+        <div id="selBlockName" class="sel-name">選択中: -</div>
+        <div id="palette" class="palette"></div>
+      </section>
+
+      <section class="panel">
+        <h2>サイズ設定</h2>
+        <div class="dim-row">
+          <label>幅X<input id="dimX" type="number" min="1" max="96" value="9"></label>
+          <label>高さY<input id="dimY" type="number" min="1" max="96" value="6"></label>
+          <label>奥行Z<input id="dimZ" type="number" min="1" max="96" value="7"></label>
+        </div>
+        <button id="btnResize">サイズ変更</button>
+      </section>
+    </aside>
+
+    <!-- 中央 -->
+    <div class="center">
+      <section class="panel canvas-panel">
+        <h2>平面エディタ(上から見た図)</h2>
+        <div class="canvas-wrap"><canvas id="editorCanvas" width="440" height="440"></canvas></div>
+        <div class="layer-ctrl">
+          <button id="layerDown" title="下の層へ">▼</button>
+          <input id="layerSlider" type="range" min="0" max="5" value="0">
+          <button id="layerUp" title="上の層へ">▲</button>
+          <span id="layerLabel">層 1 / 6</span>
+          <label class="onion"><input id="onionChk" type="checkbox" checked> オニオンスキン(下層表示)</label>
+        </div>
+      </section>
+
+      <section class="panel canvas-panel">
+        <h2>3Dプレビュー</h2>
+        <div class="canvas-wrap"><canvas id="isoCanvas" width="480" height="440"></canvas></div>
+        <div class="iso-ctrl">
+          <button id="btnRot">🔄 回転</button>
+          <button id="btnZoomIn">＋</button>
+          <button id="btnZoomOut">－</button>
+          <button id="btnFit">画面に合わせる</button>
+          <span id="rotLabel">向き 1/4</span>
+        </div>
+      </section>
+    </div>
+
+    <!-- 右サイドバー -->
+    <aside class="right">
+      <section class="panel">
+        <h2>必要ブロック集計</h2>
+        <div id="matPanel"></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="footer">
+    <span>ビルド不要 / 外部依存なし — <code>index.html</code> を開くだけで動作します。作った設計図は自動保存され、JSON・PNG・テキストで書き出せます。</span>
+  </footer>
+
+  <script src="js/blocks.js"></script>
+  <script src="js/model.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/iso.js"></script>
+  <script src="js/editor.js"></script>
+  <script src="js/materials.js"></script>
+  <script src="js/storage.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
