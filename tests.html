@@ -76,6 +76,16 @@
         ok('屋根[' + rs + ']生成', b && M.totalSolid(b) > 0);
       });
 
+      // オシャレ建築(木組み・中世)
+      var med = T.gen('house', { X: 11, D: 9, floors: 2, style: '中世ファンタジー', purpose: 'none', version: '1.21' });
+      ok('中世: 木組み(ダークオーク)あり', has(med, 11));
+      ok('中世: 石の土台あり', has(med, 2));
+      ok('中世: テラコッタ屋根あり', has(med, 68));
+      var medOld = T.gen('house', { X: 11, D: 9, style: '中世ファンタジー', version: '1.7' });
+      ok('中世1.7: テラコッタ→レンガ', has(medOld, 5) && !has(medOld, 68));
+      var wm = T.gen('windmill', { W: 7, H: 16, version: '1.21' });
+      ok('風車: 生成+羽根あり', wm && M.totalSolid(wm) > 0 && has(wm, 11));
+
       // 全タイプ生成
       T.TYPES.forEach(function (t) {
         var opts = {}; t.fields.forEach(function (f) { opts[f.key] = f.def; }); opts.version = '1.21';

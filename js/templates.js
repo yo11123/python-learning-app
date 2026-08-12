@@ -67,13 +67,21 @@
   }
 
   // ===== スタイル(材料プリセット) =========================================
-  // 役割: wall 壁 / floor 床 / roof 屋根 / pillar 柱・梁 / glass 窓 / accent
+  // 役割: wall(=漆喰/壁面) / floor / roof / pillar(=柱・梁の木材) / glass / accent
+  // 装飾フラグ: framing 木組み / foundation 石の土台id / foundationH 段数 / chimney 煙突 / overhang 軒の出
   var STYLE_PRESETS = {
     '和風':       { wall: 15, floor: 12, roof: 39, pillar: 11, glass: 4, accent: 1,  roofShape: 'japanese' },
     'モダン':     { wall: 34, floor: 33, roof: 35, pillar: 32, glass: 4, accent: 36, roofShape: 'flat' },
     '西洋':       { wall: 14, floor: 3,  roof: 5,  pillar: 10, glass: 4, accent: 2,  roofShape: 'gable' },
     'サバイバル': { wall: 3,  floor: 3,  roof: 2,  pillar: 2,  glass: 4, accent: 6,  roofShape: 'gable' },
-    'デフォルト': { wall: 3,  floor: 3,  roof: 2,  pillar: 10, glass: 4, accent: 2,  roofShape: 'gable' }
+    'デフォルト': { wall: 3,  floor: 3,  roof: 2,  pillar: 10, glass: 4, accent: 2,  roofShape: 'gable' },
+    // オシャレ建築(木組み・中世・コテージ)
+    '中世ファンタジー': { wall: 69, floor: 64, roof: 68, pillar: 11, glass: 4, accent: 14,
+                          roofShape: 'gable', framing: true, foundation: 2, foundationH: 2, chimney: true, overhang: 1 },
+    'コテージ':         { wall: 15, floor: 3,  roof: 68, pillar: 10, glass: 4, accent: 2,
+                          roofShape: 'gable', framing: true, foundation: 2, foundationH: 1, chimney: true, overhang: 1 },
+    '山小屋':           { wall: 64, floor: 64, roof: 63, pillar: 63, glass: 4, accent: 67,
+                          roofShape: 'aframe', framing: true, foundation: 67, foundationH: 1, chimney: true, overhang: 1 }
   };
   function styleOf(name) { return STYLE_PRESETS[name] || STYLE_PRESETS['デフォルト']; }
 
@@ -276,60 +284,107 @@
 
   // ===== 建物ジェネレータ ==================================================
 
-  // 家(用途別内装・スタイル・屋根形状・階数対応)
+  // 家(用途別内装・スタイル・屋根形状・階数・木組み/土台/煙突 対応)
   function house(opts) {
     var X = cd(opts.X, 9), D = cd(opts.D, 7);
     var ver = opts.version || '1.21';
     var st = styleOf(opts.style);
     var floors = Math.max(1, Math.min(8, opts.floors || 1));
-    var floorH = 4;
+    var framing = !!st.framing;
+    var floorH = framing ? 5 : 4;
     var roofShape = (opts.roofShape && opts.roofShape !== 'auto') ? opts.roofShape : st.roofShape;
     var wall = resolve(st.wall, ver), floor = resolve(st.floor, ver), glass = resolve(st.glass, ver);
-    var roofBlk = resolve(st.roof, ver), pillar = resolve(st.pillar, ver);
+    var roofBlk = resolve(st.roof, ver), timber = resolve(st.pillar, ver), accent = resolve(st.accent, ver);
+    var foundBlk = st.foundation ? resolve(st.foundation, ver) : 0;
+    var foundH = Math.min(st.foundationH || 0, floorH - 1);
 
     var baseY = floors * floorH;          // 屋根がのる高さ(最上階の天井上)
     var rH = roofHeight(roofShape, X, D);
-    var totalY = baseY + Math.max(1, rH);
+    var totalY = baseY + Math.max(1, rH) + (st.chimney ? 2 : 0);
     var bp = M.createBlueprint(X, totalY, D, '家');
 
     // 各階の床スラブ
     for (var f = 0; f < floors; f++) fillRect(bp, f * floorH, 0, 0, X - 1, D - 1, floor);
-    // 壁(全高)
+    // 壁(漆喰/壁面)
     for (var y = 1; y < baseY; y++) ringFill(bp, y, 0, 0, X - 1, D - 1, wall);
-    // 角柱(アクセント)
-    [[0, 0], [X - 1, 0], [0, D - 1], [X - 1, D - 1]].forEach(function (c) {
-      pillarY(bp, c[0], c[1], 1, baseY - 1, pillar);
-    });
-    // 窓(各階の中段)
+    // 石の土台(下段)
+    if (foundBlk && foundH) for (var yf = 1; yf <= foundH; yf++) ringFill(bp, yf, 0, 0, X - 1, D - 1, foundBlk);
+
+    var sillY = foundH > 0 ? foundH + 1 : 1;
+    if (framing) {
+      applyFraming(bp, X, D, baseY, floors, floorH, timber, sillY);
+    } else {
+      [[0, 0], [X - 1, 0], [0, D - 1], [X - 1, D - 1]].forEach(function (c) {
+        pillarY(bp, c[0], c[1], 1, baseY - 1, timber);
+      });
+    }
+
+    // 窓(各階の中段、木組み時は枠付き)
     if (opts.windows !== false) {
       for (var ff = 0; ff < floors; ff++) {
-        var wy = ff * floorH + 2;
-        addWindows(bp, wy, X, D, glass, wall);
+        var wy = ff * floorH + (ff === 0 && foundH ? foundH + 1 : Math.floor(floorH / 2));
+        addWindows(bp, wy, X, D, glass, wall, framing ? timber : 0);
       }
     }
-    // ドア(正面 z=0 中央、1階、高さ2)
+    // ドア(正面 z=0 中央、高さ2)+ 木組み時は枠
     var dx = Math.floor(X / 2);
+    if (framing) {
+      pillarY(bp, dx - 1, 0, sillY, sillY + 2, timber);
+      pillarY(bp, dx + 1, 0, sillY, sillY + 2, timber);
+      M.setSafe(bp, dx, sillY + 3, 0, timber);
+    }
     M.setSafe(bp, dx, 1, 0, 0);
-    if (baseY > 2) M.setSafe(bp, dx, 2, 0, 0);
+    M.setSafe(bp, dx, 2, 0, 0);
     // 屋根
-    var oh = roofOverhang(roofShape);
+    var oh = st.overhang != null ? st.overhang : roofOverhang(roofShape);
     (ROOFS[roofShape] || ROOFS.gable)(bp, { x0: 0, z0: 0, x1: X - 1, z1: D - 1, baseY: baseY, block: roofBlk, overhang: oh });
+    // 煙突
+    if (st.chimney) buildChimney(bp, X, D, baseY + rH, accent || foundBlk || resolve(2, ver));
     // 内装(1階)
     placeFurniture(bp, { x0: 1, z0: 1, x1: X - 2, z1: D - 2, y: 1, doorX: dx }, opts.purpose || 'none', ver);
     bp.name = '家(' + (opts.style || 'デフォルト') + ')';
     return bp;
   }
 
-  function addWindows(bp, wy, X, D, glass, wall) {
+  // 木組み(ハーフティンバー): 梁(横木)+ スタッド(縦柱)を漆喰壁に重ねる
+  function applyFraming(bp, X, D, baseY, floors, floorH, timber, sillY) {
+    var lines = {};
+    lines[sillY] = 1; lines[baseY - 1] = 1;
+    for (var f = 1; f < floors; f++) { lines[f * floorH] = 1; lines[f * floorH + 1] = 1; }
+    Object.keys(lines).forEach(function (ys) {
+      var y = +ys; if (y >= 1 && y < baseY) ringFill(bp, y, 0, 0, X - 1, D - 1, timber);
+    });
+    var sx = studPositions(X), sz = studPositions(D);
+    for (var y = sillY; y < baseY; y++) {
+      sx.forEach(function (x) { M.setSafe(bp, x, y, 0, timber); M.setSafe(bp, x, y, D - 1, timber); });
+      sz.forEach(function (z) { M.setSafe(bp, 0, y, z, timber); M.setSafe(bp, X - 1, y, z, timber); });
+    }
+  }
+  function studPositions(n) {
+    var a = []; for (var i = 0; i < n; i += 3) a.push(i);
+    if (a[a.length - 1] !== n - 1) a.push(n - 1);
+    return a;
+  }
+
+  // 煙突(石)を屋根から突き出す
+  function buildChimney(bp, X, D, topY, blk) {
+    var cx = Math.max(1, Math.min(X - 2, Math.round(X * 0.72)));
+    var cz = Math.max(1, Math.min(D - 2, Math.round(D * 0.28)));
+    pillarY(bp, cx, cz, 1, topY + 1, blk);
+  }
+
+  function addWindows(bp, wy, X, D, glass, wall, frame) {
+    function put(x, z) {
+      if (M.get(bp, x, wy, z) !== wall) return; // 漆喰面のみ
+      M.setSafe(bp, x, wy, z, glass);
+      if (frame) { // 上下に木枠
+        if (M.get(bp, x, wy + 1, z) === wall) M.setSafe(bp, x, wy + 1, z, frame);
+        if (M.get(bp, x, wy - 1, z) === wall) M.setSafe(bp, x, wy - 1, z, frame);
+      }
+    }
     var x, z;
-    for (x = 2; x < X - 1; x += 2) {
-      if (M.get(bp, x, wy, 0) === wall) M.setSafe(bp, x, wy, 0, glass);
-      if (M.get(bp, x, wy, D - 1) === wall) M.setSafe(bp, x, wy, D - 1, glass);
-    }
-    for (z = 2; z < D - 1; z += 2) {
-      if (M.get(bp, 0, wy, z) === wall) M.setSafe(bp, 0, wy, z, glass);
-      if (M.get(bp, X - 1, wy, z) === wall) M.setSafe(bp, X - 1, wy, z, glass);
-    }
+    for (x = 2; x < X - 1; x += 2) { put(x, 0); put(x, D - 1); }
+    for (z = 2; z < D - 1; z += 2) { put(0, z); put(X - 1, z); }
   }
   function roofOverhang(shape) {
     if (shape === 'japanese') return 1;
@@ -555,6 +610,42 @@
     return bp;
   }
 
+  // 風車小屋
+  function windmill(opts) {
+    var bodyW = cd(opts.W, 7), Hh = cd(opts.H, 16);
+    var ver = opts.version || '1.21';
+    var wallB = resolve(64, ver), post = resolve(11, ver), stone = resolve(2, ver);
+    var roofB = resolve(68, ver), bladeB = resolve(11, ver), sailB = resolve(15, ver), glass = resolve(4, ver);
+    var bladeLen = Math.min(7, Math.max(4, Math.floor(Hh / 2)));
+    var margin = bladeLen;
+    var sizeX = bodyW + margin * 2, sizeZ = bodyW;
+    var roofH = Math.ceil(bodyW / 2) + 1;
+    var totalY = Hh + roofH + bladeLen + 1;
+    var bp = M.createBlueprint(sizeX, totalY, sizeZ, '風車');
+    var bx0 = margin, bx1 = margin + bodyW - 1, bz0 = 0, bz1 = bodyW - 1;
+    // 床 + 本体(石2段 + トウヒ板材)
+    fillRect(bp, 0, bx0, bz0, bx1, bz1, stone);
+    for (var y = 1; y < Hh; y++) ringFill(bp, y, bx0, bz0, bx1, bz1, y <= 2 ? stone : wallB);
+    // 角柱(ダークオーク)
+    [[bx0, bz0], [bx1, bz0], [bx0, bz1], [bx1, bz1]].forEach(function (c) { pillarY(bp, c[0], c[1], 1, Hh - 1, post); });
+    // ドア + 窓
+    var dx = Math.floor((bx0 + bx1) / 2);
+    M.setSafe(bp, dx, 1, bz0, 0); M.setSafe(bp, dx, 2, bz0, 0);
+    for (var wy = 4; wy < Hh - 1; wy += 4) { M.setSafe(bp, dx, wy, bz0, glass); M.setSafe(bp, dx, wy, bz1, glass); }
+    // 屋根
+    ROOFS.hip(bp, { x0: bx0, z0: bz0, x1: bx1, z1: bz1, baseY: Hh, block: roofB, overhang: 1 });
+    // 羽根(前面 z=bz0 に X字)
+    var hubY = Hh - 2, hubX = dx;
+    M.setSafe(bp, hubX, hubY, bz0, post);
+    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(function (d) {
+      for (var i = 1; i <= bladeLen; i++) {
+        M.setSafe(bp, hubX + d[0] * i, hubY + d[1] * i, bz0, bladeB);
+        if (i >= 2) M.setSafe(bp, hubX + d[0] * i - d[1], hubY + d[1] * i + d[0], bz0, sailB);
+      }
+    });
+    return bp;
+  }
+
   // ピラミッド
   function pyramid(opts) {
     var base = cd(opts.base, 15);
@@ -639,7 +730,7 @@
   }
 
   // ===== タイプ登録表(UI用) ===============================================
-  var STYLE_FIELD = { key: 'style', label: 'スタイル', type: 'style', def: 'デフォルト' };
+  var STYLE_FIELD = { key: 'style', label: 'スタイル', type: 'style', def: '中世ファンタジー' };
   var ROOF_FIELD = { key: 'roofShape', label: '屋根の形', type: 'roof', def: 'auto' };
   var PURPOSE_FIELD = { key: 'purpose', label: '用途(内装)', type: 'purpose', def: 'none' };
 
@@ -717,6 +808,11 @@
         { key: 'W', label: '幅', type: 'int', def: 7, min: 5, max: 21 },
         { key: 'H', label: '高さ', type: 'int', def: 7, min: 4, max: 20 }
       ] },
+    { key: 'windmill', label: '風車', group: '構造物', gen: windmill,
+      fields: [
+        { key: 'W', label: '本体の幅', type: 'int', def: 7, min: 5, max: 15 },
+        { key: 'H', label: '高さ', type: 'int', def: 16, min: 8, max: 40 }
+      ] },
     { key: 'pyramid', label: 'ピラミッド', group: '地形・装飾', gen: pyramid,
       fields: [
         { key: 'base', label: '底辺', type: 'int', def: 15, min: 3, max: 48 },
@@ -766,6 +862,8 @@
       { v: 'aframe', l: 'A字' }, { v: 'shed', l: '片流れ' }, { v: 'dome', l: 'ドーム' }, { v: 'none', l: 'なし' }
     ],
     STYLE_OPTIONS: [
+      { v: '中世ファンタジー', l: '中世ファンタジー(木組み)' }, { v: 'コテージ', l: 'コテージ' },
+      { v: '山小屋', l: '山小屋(A字)' },
       { v: '和風', l: '和風' }, { v: 'モダン', l: 'モダン' }, { v: '西洋', l: '西洋' },
       { v: 'サバイバル', l: 'サバイバル素材' }, { v: 'デフォルト', l: 'デフォルト' }
     ],
