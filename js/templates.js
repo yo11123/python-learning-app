@@ -86,84 +86,82 @@
   function styleOf(name) { return STYLE_PRESETS[name] || STYLE_PRESETS['デフォルト']; }
 
   // ===== 屋根(ROOFS) =======================================================
-  // 各関数: (bp, {x0,z0,x1,z1, baseY, block, overhang}) 壁の上に屋根を積む。戻り値=屋根の高さ
+  // 各関数: (bp, {x0,z0,x1,z1(=壁の外周), baseY(=壁の1つ上), block, overhang, cap(=妻壁材)})
+  // 最下段は必ず baseY(壁の直上)に置くので浮かない。overhang は外側へ張り出す軒。
+  // 家側でキャンバスを軒ぶん広げてあるので張り出しが収まる。戻り値=屋根の高さ。
+
+  function eaveLip(bp, o) {
+    var oh = o.overhang || 0;
+    if (oh <= 0) return;
+    for (var x = o.x0 - oh; x <= o.x1 + oh; x++)
+      for (var z = o.z0 - oh; z <= o.z1 + oh; z++)
+        if (x < o.x0 || x > o.x1 || z < o.z0 || z > o.z1)
+          M.setSafe(bp, x, o.baseY, z, o.block);
+  }
+
+  // 切妻/A字。pitch=1で45°、pitch=2で急勾配。妻側(端)は cap 材で塞いで立体的に。
+  function gableRoof(bp, o, pitch) {
+    eaveLip(bp, o);
+    var cap = o.cap || o.block, oh = o.overhang || 0;
+    var alongX = (o.x1 - o.x0) >= (o.z1 - o.z0); // 棟は長い方の軸に沿わせる
+    var lo = alongX ? o.z0 : o.x0, hi = alongX ? o.z1 : o.x1;
+    var aLo = (alongX ? o.x0 : o.z0) - oh, aHi = (alongX ? o.x1 : o.z1) + oh;
+    var k = 0, top = o.baseY;
+    while (lo + k <= hi - k) {
+      var s0 = lo + k, s1 = hi - k;
+      var yLo = o.baseY + k * pitch, yHi = (s0 === s1) ? o.baseY + k * pitch : o.baseY + (k + 1) * pitch - 1;
+      for (var yy = yLo; yy <= yHi; yy++) {
+        for (var a = aLo; a <= aHi; a++) {
+          if (alongX) { M.setSafe(bp, a, yy, s0, o.block); M.setSafe(bp, a, yy, s1, o.block); }
+          else { M.setSafe(bp, s0, yy, a, o.block); M.setSafe(bp, s1, yy, a, o.block); }
+        }
+        for (var s = s0; s <= s1; s++) { // 妻壁(端の三角)を塞ぐ
+          if (alongX) { M.setSafe(bp, o.x0, yy, s, cap); M.setSafe(bp, o.x1, yy, s, cap); }
+          else { M.setSafe(bp, s, yy, o.z0, cap); M.setSafe(bp, s, yy, o.z1, cap); }
+        }
+        top = yy;
+      }
+      k++;
+    }
+    return (top - o.baseY) + 1;
+  }
+
+  // 寄棟/方形。外周リングを内側に詰めて頂点/棟へ。最下段は baseY。
+  function hipRoof(bp, o) {
+    eaveLip(bp, o);
+    var ax0 = o.x0, ax1 = o.x1, az0 = o.z0, az1 = o.z1, k = 0, top = o.baseY;
+    while (ax0 <= ax1 && az0 <= az1) {
+      ringFill(bp, o.baseY + k, ax0, az0, ax1, az1, o.block);
+      top = o.baseY + k; ax0++; ax1--; az0++; az1--; k++;
+    }
+    return (top - o.baseY) + 1;
+  }
+
   var ROOFS = {
+    none: function () { return 0; },
     flat: function (bp, o) {
       fillRect(bp, o.baseY, o.x0, o.z0, o.x1, o.z1, o.block);
-      return 1;
+      ringFill(bp, o.baseY + 1, o.x0, o.z0, o.x1, o.z1, o.cap || o.block); // パラペット(立ち上がり)
+      return 2;
     },
-    none: function () { return 0; },
-    gable: function (bp, o) {
-      var oh = o.overhang || 0;
-      var xA = o.x0 - oh, xB = o.x1 + oh;
-      var zA = o.z0 - oh, zB = o.z1 + oh;
-      var i = 0;
-      while (zA + i <= zB - i) {
-        var y = o.baseY + i;
-        for (var x = xA; x <= xB; x++) {
-          M.setSafe(bp, x, y, zA + i, o.block);
-          M.setSafe(bp, x, y, zB - i, o.block);
-        }
-        i++;
-      }
-      return i;
-    },
-    hip: function (bp, o) {
-      var oh = o.overhang || 0;
-      var xA = o.x0 - oh, xB = o.x1 + oh, zA = o.z0 - oh, zB = o.z1 + oh;
-      var i = 0;
-      while (xA + i <= xB - i && zA + i <= zB - i) {
-        ringFill(bp, o.baseY + i, xA + i, zA + i, xB - i, zB - i, o.block);
-        i++;
-      }
-      return i;
-    },
+    gable: function (bp, o) { return gableRoof(bp, o, 1); },
+    aframe: function (bp, o) { return gableRoof(bp, o, 2); },
+    hip: hipRoof,
     pyramid: function (bp, o) {
-      // 方形(四角錐)。軒なしでリングを内側に詰めて頂点へ
-      var xA = o.x0, xB = o.x1, zA = o.z0, zB = o.z1, i = 0;
-      while (xA + i <= xB - i && zA + i <= zB - i) {
-        ringFill(bp, o.baseY + i, xA + i, zA + i, xB - i, zB - i, o.block);
-        i++;
-      }
-      return i;
+      var o2 = { x0: o.x0, z0: o.z0, x1: o.x1, z1: o.z1, baseY: o.baseY, block: o.block, overhang: 0, cap: o.cap };
+      return hipRoof(bp, o2);
     },
     japanese: function (bp, o) {
-      // 反り屋根: 大きな軒 + 段状の寄棟
-      var oh = Math.max(1, o.overhang || 1);
-      // 軒の出(最下段を外側に張り出す)
-      fillRect(bp, o.baseY, o.x0 - oh, o.z0 - oh, o.x1 + oh, o.z1 + oh, o.block);
-      var xA = o.x0, xB = o.x1, zA = o.z0, zB = o.z1, i = 1;
-      while (xA + i <= xB - i && zA + i <= zB - i) {
-        ringFill(bp, o.baseY + i, xA + i, zA + i, xB - i, zB - i, o.block);
-        i++;
-      }
-      return i;
-    },
-    aframe: function (bp, o) {
-      // 急勾配の切妻(2段で1マスしか詰めない=高く尖る)
-      var oh = o.overhang || 0;
-      var xA = o.x0 - oh, xB = o.x1 + oh;
-      var zA = o.z0, zB = o.z1;
-      var i = 0, step = 0;
-      while (zA + step <= zB - step) {
-        var y = o.baseY + i;
-        for (var x = xA; x <= xB; x++) {
-          M.setSafe(bp, x, y, zA + step, o.block);
-          M.setSafe(bp, x, y, zB - step, o.block);
-        }
-        i += 1;
-        if (i % 2 === 0) step += 1; // 2段ごとに1マス詰める → 急勾配
-      }
-      return i;
+      o.overhang = Math.max(1, o.overhang || 1);
+      return hipRoof(bp, o);
     },
     shed: function (bp, o) {
-      // 片流れ(Z方向へ単傾斜)
-      var oh = o.overhang || 0;
-      var xA = o.x0 - oh, xB = o.x1 + oh;
-      var depth = o.z1 - o.z0;
+      eaveLip(bp, o);
+      var oh = o.overhang || 0, cap = o.cap || o.block, depth = o.z1 - o.z0;
       for (var j = 0; j <= depth; j++) {
-        var y = o.baseY + Math.floor(j / 1); // 1マスにつき1段
-        for (var x = xA; x <= xB; x++) M.setSafe(bp, x, y, o.z0 + j, o.block);
+        var y = o.baseY + j;
+        for (var x = o.x0 - oh; x <= o.x1 + oh; x++) M.setSafe(bp, x, y, o.z0 + j, o.block);
+        for (var yy = o.baseY; yy <= y; yy++) { M.setSafe(bp, o.x0, yy, o.z0 + j, cap); M.setSafe(bp, o.x1, yy, o.z0 + j, cap); }
       }
       return depth + 1;
     },
@@ -171,22 +169,21 @@
       var cx = (o.x0 + o.x1) / 2, cz = (o.z0 + o.z1) / 2;
       var r = Math.min(o.x1 - o.x0, o.z1 - o.z0) / 2 + 0.5;
       var h = Math.ceil(r);
-      for (var y = 0; y <= h; y++) {
+      for (var y = 0; y <= h; y++)
         for (var x = o.x0 - 1; x <= o.x1 + 1; x++)
           for (var z = o.z0 - 1; z <= o.z1 + 1; z++) {
             var d = sphereDist(x, o.baseY + y, z, cx, o.baseY, cz);
             if (d >= r - 0.85 && d <= r + 0.15) M.setSafe(bp, x, o.baseY + y, z, o.block);
           }
-      }
       return h + 1;
     }
   };
   function roofHeight(shape, X, D) {
-    if (shape === 'flat') return 1;
+    if (shape === 'flat') return 2;
     if (shape === 'none') return 0;
     if (shape === 'shed') return D;
     if (shape === 'dome') return Math.ceil(Math.min(X, D) / 2) + 1;
-    if (shape === 'aframe') return D + 2;
+    if (shape === 'aframe') return Math.floor(Math.min(X, D) / 2) * 2 + 2;
     return Math.ceil(Math.min(X, D) / 2) + 2;
   }
 
@@ -286,7 +283,7 @@
 
   // 家(用途別内装・スタイル・屋根形状・階数・木組み/土台/煙突 対応)
   function house(opts) {
-    var X = cd(opts.X, 9), D = cd(opts.D, 7);
+    var Xin = cd(opts.X, 9), Din = cd(opts.D, 7);
     var ver = opts.version || '1.21';
     var st = styleOf(opts.style);
     var floors = Math.max(1, Math.min(8, opts.floors || 1));
@@ -297,97 +294,101 @@
     var roofBlk = resolve(st.roof, ver), timber = resolve(st.pillar, ver), accent = resolve(st.accent, ver);
     var foundBlk = st.foundation ? resolve(st.foundation, ver) : 0;
     var foundH = Math.min(st.foundationH || 0, floorH - 1);
+    var oh = st.overhang != null ? st.overhang : roofOverhang(roofShape);
 
-    var baseY = floors * floorH;          // 屋根がのる高さ(最上階の天井上)
-    var rH = roofHeight(roofShape, X, D);
+    // 軒の張り出し + 巾木ぶんキャンバスを広げ、壁を内側にオフセット(凹凸のため)
+    var pad = Math.max(oh, foundBlk ? 1 : 0);
+    var X = Xin + 2 * pad, D = Din + 2 * pad;
+    var bx0 = pad, bz0 = pad, bx1 = pad + Xin - 1, bz1 = pad + Din - 1;
+
+    var baseY = floors * floorH;          // 屋根がのる高さ
+    var rH = roofHeight(roofShape, Xin, Din);
     var totalY = baseY + Math.max(1, rH) + (st.chimney ? 2 : 0);
     var bp = M.createBlueprint(X, totalY, D, '家');
 
     // 各階の床スラブ
-    for (var f = 0; f < floors; f++) fillRect(bp, f * floorH, 0, 0, X - 1, D - 1, floor);
+    for (var f = 0; f < floors; f++) fillRect(bp, f * floorH, bx0, bz0, bx1, bz1, floor);
     // 壁(漆喰/壁面)
-    for (var y = 1; y < baseY; y++) ringFill(bp, y, 0, 0, X - 1, D - 1, wall);
-    // 石の土台(下段)
-    if (foundBlk && foundH) for (var yf = 1; yf <= foundH; yf++) ringFill(bp, yf, 0, 0, X - 1, D - 1, foundBlk);
-
-    var sillY = foundH > 0 ? foundH + 1 : 1;
-    if (framing) {
-      applyFraming(bp, X, D, baseY, floors, floorH, timber, sillY);
-    } else {
-      [[0, 0], [X - 1, 0], [0, D - 1], [X - 1, D - 1]].forEach(function (c) {
-        pillarY(bp, c[0], c[1], 1, baseY - 1, timber);
-      });
+    for (var y = 1; y < baseY; y++) ringFill(bp, y, bx0, bz0, bx1, bz1, wall);
+    // 石の土台 + 1マス張り出した巾木(凹凸)
+    if (foundBlk && foundH) {
+      for (var yf = 1; yf <= foundH; yf++) ringFill(bp, yf, bx0, bz0, bx1, bz1, foundBlk);
+      if (pad >= 1) ringFill(bp, 1, bx0 - 1, bz0 - 1, bx1 + 1, bz1 + 1, foundBlk); // 張り出し巾木
     }
 
-    // 窓(各階の中段、木組み時は枠付き)
+    var sillY = foundH > 0 ? foundH + 1 : 1;
+    if (framing) applyFraming(bp, bx0, bz0, bx1, bz1, baseY, floors, floorH, timber, sillY);
+    else [[bx0, bz0], [bx1, bz0], [bx0, bz1], [bx1, bz1]].forEach(function (c) { pillarY(bp, c[0], c[1], 1, baseY - 1, timber); });
+
+    // 窓(各階の中段、木組み時は枠付き)+ 正面に小さな庇(凹凸)
     if (opts.windows !== false) {
       for (var ff = 0; ff < floors; ff++) {
         var wy = ff * floorH + (ff === 0 && foundH ? foundH + 1 : Math.floor(floorH / 2));
-        addWindows(bp, wy, X, D, glass, wall, framing ? timber : 0);
+        addWindows(bp, wy, bx0, bz0, bx1, bz1, glass, wall, framing ? timber : 0, roofBlk, pad);
       }
     }
-    // ドア(正面 z=0 中央、高さ2)+ 木組み時は枠
-    var dx = Math.floor(X / 2);
+    // ドア(正面 z=bz0 中央、高さ2)+ 木組み時は枠
+    var dx = Math.floor((bx0 + bx1) / 2);
     if (framing) {
-      pillarY(bp, dx - 1, 0, sillY, sillY + 2, timber);
-      pillarY(bp, dx + 1, 0, sillY, sillY + 2, timber);
-      M.setSafe(bp, dx, sillY + 3, 0, timber);
+      pillarY(bp, dx - 1, bz0, sillY, sillY + 2, timber);
+      pillarY(bp, dx + 1, bz0, sillY, sillY + 2, timber);
+      M.setSafe(bp, dx, sillY + 3, bz0, timber);
     }
-    M.setSafe(bp, dx, 1, 0, 0);
-    M.setSafe(bp, dx, 2, 0, 0);
-    // 屋根
-    var oh = st.overhang != null ? st.overhang : roofOverhang(roofShape);
-    (ROOFS[roofShape] || ROOFS.gable)(bp, { x0: 0, z0: 0, x1: X - 1, z1: D - 1, baseY: baseY, block: roofBlk, overhang: oh });
+    M.setSafe(bp, dx, 1, bz0, 0);
+    M.setSafe(bp, dx, 2, bz0, 0);
+    // 屋根(妻壁は漆喰材 cap で塞ぐ)
+    (ROOFS[roofShape] || ROOFS.gable)(bp, { x0: bx0, z0: bz0, x1: bx1, z1: bz1, baseY: baseY, block: roofBlk, overhang: oh, cap: wall });
     // 煙突
-    if (st.chimney) buildChimney(bp, X, D, baseY + rH, accent || foundBlk || resolve(2, ver));
+    if (st.chimney) buildChimney(bp, bx0, bz0, bx1, bz1, baseY + rH, accent || foundBlk || resolve(2, ver));
     // 内装(1階)
-    placeFurniture(bp, { x0: 1, z0: 1, x1: X - 2, z1: D - 2, y: 1, doorX: dx }, opts.purpose || 'none', ver);
+    placeFurniture(bp, { x0: bx0 + 1, z0: bz0 + 1, x1: bx1 - 1, z1: bz1 - 1, y: 1, doorX: dx }, opts.purpose || 'none', ver);
     bp.name = '家(' + (opts.style || 'デフォルト') + ')';
     return bp;
   }
 
   // 木組み(ハーフティンバー): 梁(横木)+ スタッド(縦柱)を漆喰壁に重ねる
-  function applyFraming(bp, X, D, baseY, floors, floorH, timber, sillY) {
+  function applyFraming(bp, x0, z0, x1, z1, baseY, floors, floorH, timber, sillY) {
     var lines = {};
     lines[sillY] = 1; lines[baseY - 1] = 1;
     for (var f = 1; f < floors; f++) { lines[f * floorH] = 1; lines[f * floorH + 1] = 1; }
     Object.keys(lines).forEach(function (ys) {
-      var y = +ys; if (y >= 1 && y < baseY) ringFill(bp, y, 0, 0, X - 1, D - 1, timber);
+      var y = +ys; if (y >= 1 && y < baseY) ringFill(bp, y, x0, z0, x1, z1, timber);
     });
-    var sx = studPositions(X), sz = studPositions(D);
+    var sx = studPositions(x0, x1), sz = studPositions(z0, z1);
     for (var y = sillY; y < baseY; y++) {
-      sx.forEach(function (x) { M.setSafe(bp, x, y, 0, timber); M.setSafe(bp, x, y, D - 1, timber); });
-      sz.forEach(function (z) { M.setSafe(bp, 0, y, z, timber); M.setSafe(bp, X - 1, y, z, timber); });
+      sx.forEach(function (x) { M.setSafe(bp, x, y, z0, timber); M.setSafe(bp, x, y, z1, timber); });
+      sz.forEach(function (z) { M.setSafe(bp, x0, y, z, timber); M.setSafe(bp, x1, y, z, timber); });
     }
   }
-  function studPositions(n) {
-    var a = []; for (var i = 0; i < n; i += 3) a.push(i);
-    if (a[a.length - 1] !== n - 1) a.push(n - 1);
+  function studPositions(a0, a1) {
+    var a = []; for (var i = a0; i <= a1; i += 3) a.push(i);
+    if (a[a.length - 1] !== a1) a.push(a1);
     return a;
   }
 
   // 煙突(石)を屋根から突き出す
-  function buildChimney(bp, X, D, topY, blk) {
-    var cx = Math.max(1, Math.min(X - 2, Math.round(X * 0.72)));
-    var cz = Math.max(1, Math.min(D - 2, Math.round(D * 0.28)));
+  function buildChimney(bp, x0, z0, x1, z1, topY, blk) {
+    var cx = Math.max(x0, Math.min(x1, Math.round(x0 + (x1 - x0) * 0.72)));
+    var cz = Math.max(z0, Math.min(z1, Math.round(z0 + (z1 - z0) * 0.28)));
     pillarY(bp, cx, cz, 1, topY + 1, blk);
   }
 
-  function addWindows(bp, wy, X, D, glass, wall, frame) {
-    function put(x, z) {
+  function addWindows(bp, wy, x0, z0, x1, z1, glass, wall, frame, awning, pad) {
+    function put(x, z, front) {
       if (M.get(bp, x, wy, z) !== wall) return; // 漆喰面のみ
       M.setSafe(bp, x, wy, z, glass);
-      if (frame) { // 上下に木枠
+      if (frame) {
         if (M.get(bp, x, wy + 1, z) === wall) M.setSafe(bp, x, wy + 1, z, frame);
         if (M.get(bp, x, wy - 1, z) === wall) M.setSafe(bp, x, wy - 1, z, frame);
       }
+      // 正面窓の下に張り出す庇(凹凸)
+      if (front && pad >= 1 && awning) M.setSafe(bp, x, wy - 1, z - 1, awning);
     }
     var x, z;
-    for (x = 2; x < X - 1; x += 2) { put(x, 0); put(x, D - 1); }
-    for (z = 2; z < D - 1; z += 2) { put(0, z); put(X - 1, z); }
+    for (x = x0 + 2; x < x1; x += 2) { put(x, z0, true); put(x, z1, false); }
+    for (z = z0 + 2; z < z1; z += 2) { put(x0, z, false); put(x1, z, false); }
   }
   function roofOverhang(shape) {
-    if (shape === 'japanese') return 1;
     if (shape === 'flat' || shape === 'none') return 0;
     return 1;
   }
