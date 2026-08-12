@@ -85,6 +85,15 @@
       ok('中世1.7: テラコッタ→レンガ', has(medOld, 5) && !has(medOld, 68));
       var wm = T.gen('windmill', { W: 7, H: 16, version: '1.21' });
       ok('風車: 生成+羽根あり', wm && M.totalSolid(wm) > 0 && has(wm, 11));
+      // 装飾(出窓/バルコニー)の有無で数が変わる
+      var dOn = T.gen('house', { X: 13, D: 9, floors: 2, style: '中世ファンタジー', details: true, version: '1.21' });
+      var dOff = T.gen('house', { X: 13, D: 9, floors: 2, style: '中世ファンタジー', details: false, version: '1.21' });
+      ok('装飾ありは装飾なしよりブロックが多い', M.totalSolid(dOn) > M.totalSolid(dOff));
+      // 新ジャンル
+      ok('教会: 頂華(金)あり', has(T.gen('church', { W: 11, L: 17, H: 8, version: '1.21' }), 27));
+      ok('鐘楼: 鐘(金)あり', has(T.gen('belltower', { W: 5, H: 18, version: '1.21' }), 27));
+      ok('露店: 生成', M.totalSolid(T.gen('stall', { W: 5, D: 4, version: '1.21' })) > 0);
+      ok('宿屋: 生成', M.totalSolid(T.gen('inn', { X: 13, D: 9, version: '1.21' })) > 0);
 
       // 全タイプ生成
       T.TYPES.forEach(function (t) {

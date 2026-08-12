@@ -336,6 +336,12 @@
     }
     M.setSafe(bp, dx, 1, bz0, 0);
     M.setSafe(bp, dx, 2, bz0, 0);
+    // 出窓・バルコニー(木組みスタイルの立体装飾)
+    if (framing && opts.details !== false && pad >= 1) {
+      var gLo = (foundH ? foundH + 1 : 1) + 1;
+      bayWindow(bp, bx0, bz0, bx1, gLo, gLo + 1, glass, timber, roofBlk, dx);
+      if (floors >= 2) balcony(bp, bx0, bz0, bx1, floorH, timber, floor);
+    }
     // 屋根(妻壁は漆喰材 cap で塞ぐ)
     (ROOFS[roofShape] || ROOFS.gable)(bp, { x0: bx0, z0: bz0, x1: bx1, z1: bz1, baseY: baseY, block: roofBlk, overhang: oh, cap: wall });
     // 煙突
@@ -359,11 +365,55 @@
       sx.forEach(function (x) { M.setSafe(bp, x, y, z0, timber); M.setSafe(bp, x, y, z1, timber); });
       sz.forEach(function (z) { M.setSafe(bp, x0, y, z, timber); M.setSafe(bp, x1, y, z, timber); });
     }
+    // 斜めの筋かい(各パネルの下部にV字) — チューダー様式の質感
+    var braceTop = Math.min(baseY - 2, sillY + 2);
+    for (var i = 0; i < sx.length - 1; i++) {
+      braceV(bp, sx[i], sx[i + 1], sillY, braceTop, z0, true, timber);
+      braceV(bp, sx[i], sx[i + 1], sillY, braceTop, z1, true, timber);
+    }
+    for (var j = 0; j < sz.length - 1; j++) {
+      braceV(bp, sz[j], sz[j + 1], sillY, braceTop, x0, false, timber);
+      braceV(bp, sz[j], sz[j + 1], sillY, braceTop, x1, false, timber);
+    }
+  }
+  // パネル内にV字の筋かいを描く(alongX: 壁が x 方向に伸びる面)
+  function braceV(bp, a, b, yLo, yHi, fixed, alongX, t) {
+    var w = b - a; if (w < 2) return;
+    var h = Math.min(w, yHi - yLo);
+    for (var k = 0; k <= h; k++) {
+      if (alongX) { M.setSafe(bp, a + k, yLo + k, fixed, t); M.setSafe(bp, b - k, yLo + k, fixed, t); }
+      else { M.setSafe(bp, fixed, yLo + k, a + k, t); M.setSafe(bp, fixed, yLo + k, b - k, t); }
+    }
   }
   function studPositions(a0, a1) {
     var a = []; for (var i = a0; i <= a1; i += 3) a.push(i);
     if (a[a.length - 1] !== a1) a.push(a1);
     return a;
+  }
+
+  // 出窓(正面 z0 に1マス張り出すガラスの箱 + 小庇 + 持ち送り)
+  function bayWindow(bp, bx0, bz0, bx1, yLo, yHi, glass, frame, roofB, doorX) {
+    var cx = doorX - 3; if (cx - 1 < bx0 + 1) cx = doorX + 3;
+    if (cx - 1 < bx0 + 1 || cx + 1 > bx1 - 1) return;
+    var z = bz0 - 1;
+    for (var y = yLo; y <= yHi; y++)
+      for (var x = cx - 1; x <= cx + 1; x++)
+        M.setSafe(bp, x, y, z, x === cx ? glass : frame);
+    M.setSafe(bp, cx, yLo, z, glass);
+    for (var x2 = cx - 1; x2 <= cx + 1; x2++) {
+      M.setSafe(bp, x2, yLo - 1, z, frame);   // 持ち送り(下の支え)
+      M.setSafe(bp, x2, yHi + 1, z, roofB);   // 小庇
+    }
+  }
+
+  // バルコニー(2階以上・正面に張り出す床 + 手すり)
+  function balcony(bp, bx0, bz0, bx1, floorY, timber, plank) {
+    var z = bz0 - 1;
+    for (var x = bx0 + 1; x <= bx1 - 1; x++) {
+      M.setSafe(bp, x, floorY, z, plank);          // 張り出し床
+      M.setSafe(bp, x, floorY + 1, z, timber);     // 手すり
+      M.setSafe(bp, x, floorY - 1, z, timber);     // 下の支え
+    }
   }
 
   // 煙突(石)を屋根から突き出す
@@ -647,6 +697,88 @@
     return bp;
   }
 
+  // 教会(身廊 + 鐘楼 + 尖塔)
+  function church(opts) {
+    var W = cd(opts.W, 11), L = cd(opts.L, 17), H = cd(opts.H, 8);
+    var ver = opts.version || '1.21';
+    var stone = resolve(14, ver), floor = resolve(2, ver), roof = resolve(38, ver), glass = resolve(4, ver), gold = resolve(27, ver);
+    var towerW = 5, towerH = H + 8, pad = 1;
+    var X = W + 2 * pad, D = L + towerW + 2 * pad;
+    var totalY = towerH + Math.ceil(towerW / 2) + 3;
+    var bp = M.createBlueprint(X, totalY, D, '教会');
+    var hx0 = pad, hx1 = pad + W - 1;
+    var hz0 = pad + towerW, hz1 = pad + towerW + L - 1;
+    // 身廊
+    fillRect(bp, 0, hx0, hz0, hx1, hz1, floor);
+    for (var y = 1; y < H; y++) ringFill(bp, y, hx0, hz0, hx1, hz1, stone);
+    for (var z = hz0 + 2; z < hz1; z += 3) { // アーチ窓
+      for (var yy = 2; yy <= 4; yy++) { M.setSafe(bp, hx0, yy, z, glass); M.setSafe(bp, hx1, yy, z, glass); }
+      M.setSafe(bp, hx0, 5, z, glass); M.setSafe(bp, hx1, 5, z, glass);
+    }
+    ROOFS.gable(bp, { x0: hx0, z0: hz0, x1: hx1, z1: hz1, baseY: H, block: roof, overhang: 1, cap: stone });
+    // 鐘楼(前方)
+    var tx0 = pad + Math.floor((W - towerW) / 2), tx1 = tx0 + towerW - 1, tz0 = pad, tz1 = pad + towerW - 1;
+    var tcx = Math.floor((tx0 + tx1) / 2), tcz = Math.floor((tz0 + tz1) / 2);
+    fillRect(bp, 0, tx0, tz0, tx1, tz1, floor);
+    for (var ty = 1; ty < towerH; ty++) ringFill(bp, ty, tx0, tz0, tx1, tz1, stone);
+    for (var by = towerH - 3; by < towerH - 1; by++) { // 鐘楼の開口
+      M.setSafe(bp, tcx, by, tz0, 0); M.setSafe(bp, tcx, by, tz1, 0);
+      M.setSafe(bp, tx0, by, tcz, 0); M.setSafe(bp, tx1, by, tcz, 0);
+    }
+    ROOFS.pyramid(bp, { x0: tx0, z0: tz0, x1: tx1, z1: tz1, baseY: towerH, block: roof, overhang: 0, cap: roof });
+    M.setSafe(bp, tcx, towerH + Math.ceil(towerW / 2) + 1, tcz, gold); // 頂華
+    M.setSafe(bp, tcx, 1, tz0, 0); M.setSafe(bp, tcx, 2, tz0, 0); M.setSafe(bp, tcx, 3, tz0, 0); // 大扉
+    return bp;
+  }
+
+  // 宿屋(2階建て木組み + 吊り看板)
+  function inn(opts) {
+    var ver = opts.version || '1.21';
+    var bp = house({ X: opts.X || 13, D: opts.D || 9, floors: 2, style: '中世ファンタジー',
+      roofShape: 'gable', windows: true, purpose: opts.purpose || 'none', details: true, version: ver });
+    var wood = resolve(11, ver), sign = resolve(3, ver);
+    var y = 8;
+    M.setSafe(bp, 2, y, 0, wood); M.setSafe(bp, 2, y + 1, 1, wood);
+    M.setSafe(bp, 2, y - 1, 0, sign); M.setSafe(bp, 2, y - 2, 0, sign);
+    bp.name = '宿屋';
+    return bp;
+  }
+
+  // 市場の露店(4本柱 + カウンター + 縞のオーニング)
+  function stall(opts) {
+    var W = cd(opts.W, 5), Dp = cd(opts.D, 4);
+    var ver = opts.version || '1.21';
+    var post = resolve(10, ver), counter = resolve(3, ver), a1 = resolve(17, ver), a2 = resolve(15, ver), barrel = resolve(52, ver);
+    var bp = M.createBlueprint(W, 4 + Math.ceil(Dp / 2) + 1, Dp, '露店');
+    fillRect(bp, 0, 0, 0, W - 1, Dp - 1, resolve(2, ver));
+    [[0, 0], [W - 1, 0], [0, Dp - 1], [W - 1, Dp - 1]].forEach(function (c) { pillarY(bp, c[0], c[1], 1, 3, post); });
+    for (var x = 1; x < W - 1; x++) M.setSafe(bp, x, 1, 0, counter); // カウンター
+    for (var j = 0; j < Dp; j++) { // 縞のオーニング(片流れ)
+      var yy = 4 + Math.floor(j / 2);
+      for (var xx = 0; xx < W; xx++) M.setSafe(bp, xx, yy, j, (xx % 2 === 0) ? a1 : a2);
+    }
+    if (barrel) M.setSafe(bp, 1, 1, Dp - 1, barrel);
+    return bp;
+  }
+
+  // 鐘楼(開いた鐘楼 + 鐘 + 尖り屋根)
+  function belltower(opts) {
+    var W = cd(opts.W, 5), H = cd(opts.H, 18);
+    var ver = opts.version || '1.21';
+    var stone = resolve(14, ver), roof = resolve(38, ver), bell = resolve(27, ver), wood = resolve(10, ver);
+    var bp = M.createBlueprint(W, H + Math.ceil(W / 2) + 2, W, '鐘楼');
+    var cxm = Math.floor((W - 1) / 2);
+    fillRect(bp, 0, 0, 0, W - 1, W - 1, resolve(2, ver));
+    for (var y = 1; y < H - 3; y++) ringFill(bp, y, 0, 0, W - 1, W - 1, stone);
+    for (var by = H - 3; by < H; by++) // 開いた鐘楼(四隅の柱のみ)
+      [[0, 0], [W - 1, 0], [0, W - 1], [W - 1, W - 1]].forEach(function (c) { M.setSafe(bp, c[0], by, c[1], wood); });
+    M.setSafe(bp, cxm, H - 1, cxm, wood);  // 梁
+    M.setSafe(bp, cxm, H - 2, cxm, bell);  // 鐘
+    ROOFS.pyramid(bp, { x0: 0, z0: 0, x1: W - 1, z1: W - 1, baseY: H, block: roof, overhang: 0, cap: roof });
+    M.setSafe(bp, cxm, 1, 0, 0); M.setSafe(bp, cxm, 2, 0, 0); // ドア
+    return bp;
+  }
+
   // ピラミッド
   function pyramid(opts) {
     var base = cd(opts.base, 15);
@@ -742,7 +874,8 @@
         { key: 'D', label: '奥行Z', type: 'int', def: 7, min: 5, max: 32 },
         { key: 'floors', label: '階数', type: 'int', def: 1, min: 1, max: 6 },
         STYLE_FIELD, ROOF_FIELD, PURPOSE_FIELD,
-        { key: 'windows', label: '窓をつける', type: 'bool', def: true }
+        { key: 'windows', label: '窓をつける', type: 'bool', def: true },
+        { key: 'details', label: '装飾(出窓/筋かい/バルコニー)', type: 'bool', def: true }
       ] },
     { key: 'building', label: 'ビル', group: '住居・建物', gen: building,
       fields: [
@@ -772,6 +905,18 @@
         { key: 'D', label: '奥行Z', type: 'int', def: 21, min: 11, max: 48 },
         { key: 'H', label: '壁の高さ', type: 'int', def: 7, min: 4, max: 20 },
         STYLE_FIELD
+      ] },
+    { key: 'church', label: '教会', group: '住居・建物', gen: church,
+      fields: [
+        { key: 'W', label: '身廊の幅', type: 'int', def: 11, min: 7, max: 21 },
+        { key: 'L', label: '身廊の長さ', type: 'int', def: 17, min: 9, max: 40 },
+        { key: 'H', label: '壁の高さ', type: 'int', def: 8, min: 5, max: 16 }
+      ] },
+    { key: 'inn', label: '宿屋', group: '住居・建物', gen: inn,
+      fields: [
+        { key: 'X', label: '幅X', type: 'int', def: 13, min: 9, max: 24 },
+        { key: 'D', label: '奥行Z', type: 'int', def: 9, min: 7, max: 20 },
+        PURPOSE_FIELD
       ] },
     { key: 'wall', label: '壁・塀', group: '構造物', gen: wall,
       fields: [
@@ -813,6 +958,16 @@
       fields: [
         { key: 'W', label: '本体の幅', type: 'int', def: 7, min: 5, max: 15 },
         { key: 'H', label: '高さ', type: 'int', def: 16, min: 8, max: 40 }
+      ] },
+    { key: 'belltower', label: '鐘楼', group: '構造物', gen: belltower,
+      fields: [
+        { key: 'W', label: '幅', type: 'int', def: 5, min: 3, max: 11 },
+        { key: 'H', label: '高さ', type: 'int', def: 18, min: 8, max: 40 }
+      ] },
+    { key: 'stall', label: '市場の露店', group: '構造物', gen: stall,
+      fields: [
+        { key: 'W', label: '幅', type: 'int', def: 5, min: 3, max: 12 },
+        { key: 'D', label: '奥行', type: 'int', def: 4, min: 3, max: 10 }
       ] },
     { key: 'pyramid', label: 'ピラミッド', group: '地形・装飾', gen: pyramid,
       fields: [
