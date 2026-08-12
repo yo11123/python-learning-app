@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <title>テスト - マインクラフト設計図メーカー</title>
+  <style>
+    body { font-family: monospace; background: #0d1017; color: #e6ecf3; padding: 20px; }
+    h1 { font-size: 18px; }
+    .pass { color: #59b06a; }
+    .fail { color: #e5534b; font-weight: bold; }
+    #summary { font-size: 16px; margin: 12px 0; padding: 8px; border-radius: 6px; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 2px 0; }
+  </style>
+</head>
+<body>
+  <h1>ロジックテスト</h1>
+  <div id="summary">実行中...</div>
+  <ul id="results"></ul>
+
+  <script src="js/blocks.js"></script>
+  <script src="js/model.js"></script>
+  <script src="js/templates.js"></script>
+  <script src="js/iso.js"></script>
+  <script src="js/materials.js"></script>
+  <script src="js/storage.js"></script>
+  <script>
+    (function () {
+      var M = MCBP.model, T = MCBP.templates, B = MCBP.blocks, MAT = MCBP.materials, ST = MCBP.storage, ISO = MCBP.iso;
+      var results = document.getElementById('results');
+      var pass = 0, fail = 0;
+      function ok(name, cond) {
+        var li = document.createElement('li');
+        li.className = cond ? 'pass' : 'fail';
+        li.textContent = (cond ? '✓ ' : '✗ ') + name;
+        results.appendChild(li);
+        cond ? pass++ : fail++;
+      }
+      function has(bp, id) { var f = false; M.forEachSolid(bp, function (x, y, z, v) { if (v === id) f = true; }); return f; }
+      function countId(bp, id) { var n = 0; M.forEachSolid(bp, function (x, y, z, v) { if (v === id) n++; }); return n; }
+
+      // blocks / フォールバック
+      ok('樽は1.13でチェストにフォールバック', B.resolveBlock(52, '1.13') === 41);
+      ok('樽は1.14でそのまま', B.resolveBlock(52, '1.14') === 52);
+      ok('白コンクリートは1.7で白羊毛', B.resolveBlock(34, '1.7') === 15);
+      ok('石切台は古versionで省略(0)', B.resolveBlock(56, '1.13') === 0);
+      ok('深層岩は1.16で石', B.resolveBlock(38, '1.16') === 1);
+
+      // model
+      var bp = M.createBlueprint(4, 3, 5, 't');
+      M.set(bp, 1, 2, 3, 7);
+      ok('model set/get', M.get(bp, 1, 2, 3) === 7);
+      ok('model 範囲外は0', M.get(bp, 99, 0, 0) === 0);
+      M.resize(bp, 6, 3, 5);
+      ok('resize でデータ保持', M.get(bp, 1, 2, 3) === 7 && bp.dims.x === 6);
+
+      // 用途別インテリア
+      var souko = T.gen('house', { X: 9, D: 7, purpose: 'souko', version: '1.21' });
+      ok('倉庫: チェストあり', has(souko, 41));
+      ok('倉庫: かまど無し', !has(souko, 43));
+      var ench = T.gen('house', { X: 9, D: 9, purpose: 'enchant', version: '1.21' });
+      ok('エンチャント: テーブルあり', has(ench, 44));
+      ok('エンチャント: 本棚8個以上', countId(ench, 45) >= 8);
+
+      // バージョンフォールバック(内装)
+      var old = T.gen('house', { X: 11, D: 9, purpose: 'sagyou', version: '1.13' });
+      ok('作業場1.13: 溶鉱炉無し', !has(old, 53));
+      ok('作業場1.13: かまど有り', has(old, 43));
+
+      // 屋根
+      var g = T.gen('house', { X: 9, D: 7, roofShape: 'gable', purpose: 'none' });
+      var fl = T.gen('house', { X: 9, D: 7, roofShape: 'flat', purpose: 'none' });
+      ok('切妻屋根は平屋根より高い', g.dims.y > fl.dims.y);
+      ['flat', 'gable', 'hip', 'pyramid', 'japanese', 'aframe', 'shed', 'dome', 'none'].forEach(function (rs) {
+        var b = T.gen('house', { X: 9, D: 7, roofShape: rs, purpose: 'none' });
+        ok('屋根[' + rs + ']生成', b && M.totalSolid(b) > 0);
+      });
+
+      // 全タイプ生成
+      T.TYPES.forEach(function (t) {
+        var opts = {}; t.fields.forEach(function (f) { opts[f.key] = f.def; }); opts.version = '1.21';
+        var b = T.gen(t.key, opts);
+        ok('タイプ[' + t.label + ']生成', b && M.totalSolid(b) > 0);
+      });
+
+      // 集計
+      ok('集計合計=ブロック総数', MAT.count(souko).reduce(function (a, r) { return a + r.n; }, 0) === M.totalSolid(souko));
+      ok('stackText(204)', MAT.stackText(204) === '3スタック + 12個 (計204個)');
+      ok('stackText(64)', MAT.stackText(64) === '1スタック (64個)');
+
+      // 保存往復
+      var back = ST.deserialize(ST.serialize(souko));
+      ok('serialize→deserialize 往復一致',
+        back.dims.x === souko.dims.x && back.dims.y === souko.dims.y &&
+        back.dims.z === souko.dims.z && M.totalSolid(back) === M.totalSolid(souko));
+
+      // iso
+      var p = ISO.project(0, 0, 0, 16, 100, 100);
+      ok('iso.project 原点', p.sx === 100 && p.sy === 100);
+
+      var sum = document.getElementById('summary');
+      sum.textContent = pass + ' 件成功 / ' + fail + ' 件失敗';
+      sum.style.background = fail ? '#5a1f1f' : '#1f4a2a';
+    })();
+  </script>
+</body>
+</html>
