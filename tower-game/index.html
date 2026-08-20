@@ -178,6 +178,7 @@
   <div id="over" class="screen">
     <h2>GAME OVER</h2>
     <div class="res" id="overRes"></div>
+    <button class="bigbtn" id="btnRevive" style="border-color:var(--gem); color:var(--gem)">💎100 で復活(HP全回復+続行)</button>
     <button class="bigbtn primary" id="btnRetry">もう一度</button>
     <button class="bigbtn" id="btnHome">ホームへ</button>
   </div>
@@ -552,20 +553,7 @@ function damageTower(v){
   if (meta.cheat.god) return;
   v = Math.max(1, v*(1-S.defPct) - S.defAbs);
   run.hp -= v;
-  if (run.hp <= 0){
-    if (!run.revived && meta.gems >= 100){
-      // 自動リバイブ確認
-      if (confirm("💎100 で復活しますか?(HP全回復+敵一掃)")){
-        meta.gems -= 100; run.revived = true;
-        run.hp = S.maxHP;
-        for (const e of [...run.enemies]) killEnemy(e);
-        toast("復活しました!");
-        save(); syncHud();
-        return;
-      }
-    }
-    gameOver();
-  }
+  if (run.hp <= 0) gameOver();   // 復活はリザルト画面のボタンから
 }
 
 // ---------- タワー攻撃 ----------
@@ -1160,6 +1148,7 @@ function gameOver(){
   inGame = false;
   meta.bestWave = Math.max(meta.bestWave, run.wave);
   save();
+  $("btnRevive").style.display = (!run.revived && meta.gems >= 100) ? "" : "none";
   $("overRes").innerHTML =
     "到達ウェーブ: <b>W"+run.wave+"</b>(最高 W"+meta.bestWave+")<br>"+
     "撃破数: "+run.kills+"<br>"+
@@ -1179,7 +1168,25 @@ function quitGame(){
 $("btnStart").addEventListener("click", startGame);
 $("btnRetry").addEventListener("click", startGame);
 $("btnHome").addEventListener("click", ()=>{ show("home"); syncHome(); });
-$("btnQuit").addEventListener("click", ()=>{ if (confirm("バトルをやめてホームに戻る?(コインは保持)")) quitGame(); });
+$("btnRevive").addEventListener("click", ()=>{
+  if (!run || run.revived || meta.gems < 100) return;
+  meta.gems -= 100; run.revived = true;
+  run.enemies.length = 0; run.ebullets.length = 0; run.bullets.length = 0; run.spawnQueue.length = 0;
+  statsDirty = true; computeStatsIfDirty();
+  run.hp = S.maxHP;
+  save();
+  show("game"); syncHud();
+  inGame = true;
+  lastT = performance.now();
+  requestAnimationFrame(loop);
+  toast("💎 復活しました!");
+});
+let quitArm = 0;
+$("btnQuit").addEventListener("click", ()=>{
+  const now = performance.now();
+  if (now - quitArm < 3000){ quitGame(); }
+  else { quitArm = now; toast("もう一度押すとホームに戻ります(コインは保持)"); }
+});
 $("btnWorkshop").addEventListener("click", ()=>{ buildWsList(); $("mWorkshop").classList.add("open"); });
 $("btnUW").addEventListener("click", ()=>{ buildUwShop(); $("mUW").classList.add("open"); });
 $("btnCheatHome").addEventListener("click", ()=>openCheat());
@@ -1236,10 +1243,15 @@ $("chUWAll").addEventListener("click", ()=>{
   if (run) initUW();
   cheatDone("☄️ UW全解放!");
 });
+let resetArm = 0;
 $("chReset").addEventListener("click", ()=>{
-  if (confirm("本当にセーブデータを消しますか?")){
-    localStorage.removeItem(SAVE_KEY);
+  const now = performance.now();
+  if (now - resetArm < 3000){
+    try { localStorage.removeItem(SAVE_KEY); } catch(e){}
     location.reload();
+  } else {
+    resetArm = now;
+    toast("⚠️ もう一度押すと初期化します");
   }
 });
 
