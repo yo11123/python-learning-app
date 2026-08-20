@@ -1,0 +1,1253 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>NEON TOWER - タワーディフェンス</title>
+<style>
+  :root {
+    --bg: #07070f;
+    --panel: #10101e;
+    --panel2: #181830;
+    --line: #2a2a4a;
+    --text: #e8e8ff;
+    --dim: #8888aa;
+    --cash: #7cff6b;
+    --coin: #ffd54a;
+    --gem: #b96bff;
+    --atk: #ff5a7a;
+    --def: #4ac6ff;
+    --uti: #ffc04a;
+    --accent: #6b8cff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; -webkit-user-select:none; }
+  html, body { height:100%; overflow:hidden; background:var(--bg); color:var(--text);
+    font-family:-apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  button { font-family:inherit; color:inherit; background:none; border:none; cursor:pointer; }
+
+  #app { height:100%; display:flex; flex-direction:column; position:relative; }
+  .screen { position:absolute; inset:0; display:none; flex-direction:column; }
+  .screen.active { display:flex; }
+
+  /* ---------- ホーム ---------- */
+  #home { align-items:center; justify-content:center; gap:14px; padding:24px;
+    background: radial-gradient(ellipse at 50% 30%, #141432 0%, #07070f 70%); }
+  #home h1 { font-size:34px; letter-spacing:4px; text-align:center;
+    background:linear-gradient(135deg,#ff5a7a,#b96bff,#4ac6ff,#7cff6b);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 0 12px rgba(150,100,255,.5)); }
+  #home .sub { color:var(--dim); font-size:12px; margin-bottom:10px; }
+  .home-stats { display:flex; gap:16px; font-size:14px; margin-bottom:8px; }
+  .bigbtn { width:min(320px, 84vw); padding:15px; border-radius:14px; font-size:17px; font-weight:700;
+    border:1px solid var(--line); background:var(--panel2); transition:transform .05s; }
+  .bigbtn:active { transform:scale(.97); }
+  .bigbtn.primary { background:linear-gradient(135deg,#3d5afe,#7b2ff7); border:none;
+    box-shadow:0 0 24px rgba(90,80,255,.45); }
+  .bigbtn.cheat { border-color:#5a3; color:#8f8; }
+
+  /* ---------- ゲーム画面 ---------- */
+  #game { background:var(--bg); }
+  #hud { display:flex; align-items:center; gap:8px; padding:8px 10px; padding-top:max(8px, env(safe-area-inset-top));
+    background:var(--panel); border-bottom:1px solid var(--line); font-size:12px; flex-wrap:wrap; }
+  #hud .stat { display:flex; align-items:center; gap:4px; font-weight:700; }
+  #hud .wave { font-size:14px; color:#fff; }
+  .c-cash { color:var(--cash); } .c-coin { color:var(--coin); } .c-gem { color:var(--gem); }
+  #hud .spacer { flex:1; }
+  #hud .iconbtn { font-size:16px; padding:2px 8px; border-radius:8px; border:1px solid var(--line); background:var(--panel2); }
+
+  #canvasWrap { flex:1; position:relative; min-height:120px; overflow:hidden; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+
+  #uwbar { position:absolute; left:6px; top:6px; display:flex; flex-direction:column; gap:6px; }
+  .uwicon { width:44px; height:44px; border-radius:10px; border:1px solid var(--line);
+    background:rgba(16,16,30,.8); display:flex; align-items:center; justify-content:center;
+    font-size:20px; position:relative; overflow:hidden; }
+  .uwicon .cd { position:absolute; left:0; bottom:0; width:100%; background:rgba(107,140,255,.35); pointer-events:none; }
+  .uwicon.ready { border-color:var(--accent); box-shadow:0 0 10px rgba(107,140,255,.6); }
+
+  #cheatBadge { position:absolute; right:8px; top:6px; font-size:10px; color:#8f8; border:1px solid #5a3;
+    border-radius:8px; padding:2px 8px; background:rgba(20,40,20,.7); display:none; }
+
+  /* ---------- アップグレードパネル ---------- */
+  #panel { height:37%; min-height:230px; display:flex; flex-direction:column;
+    background:var(--panel); border-top:1px solid var(--line); padding-bottom:env(safe-area-inset-bottom); }
+  #tabs { display:flex; }
+  #tabs button { flex:1; padding:10px 4px; font-size:13px; font-weight:700; color:var(--dim);
+    border-bottom:2px solid transparent; }
+  #tabs button.on[data-tab="attack"]  { color:var(--atk); border-color:var(--atk); }
+  #tabs button.on[data-tab="defense"] { color:var(--def); border-color:var(--def); }
+  #tabs button.on[data-tab="utility"] { color:var(--uti); border-color:var(--uti); }
+  #upList { flex:1; overflow-y:auto; padding:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px; align-content:start; }
+  .upbtn { border:1px solid var(--line); background:var(--panel2); border-radius:10px; padding:8px 10px;
+    text-align:left; display:flex; flex-direction:column; gap:2px; min-height:64px; }
+  .upbtn:active { background:#222246; }
+  .upbtn .nm { font-size:12px; font-weight:700; display:flex; justify-content:space-between; }
+  .upbtn .lv { color:var(--dim); font-weight:400; font-size:11px; }
+  .upbtn .vl { font-size:11px; color:var(--dim); }
+  .upbtn .cost { font-size:12px; font-weight:700; color:var(--cash); }
+  .upbtn.coin .cost { color:var(--coin); }
+  .upbtn.max .cost { color:var(--dim); }
+  .upbtn.cant { opacity:.45; }
+  .upbtn.free .cost { color:#6bffd8; }
+
+  /* ---------- モーダル ---------- */
+  .modal { position:absolute; inset:0; background:rgba(0,0,10,.75); display:none;
+    align-items:flex-end; justify-content:center; z-index:30; }
+  .modal.open { display:flex; }
+  .sheet { width:100%; max-width:520px; max-height:86%; background:var(--panel);
+    border-radius:18px 18px 0 0; border:1px solid var(--line); display:flex; flex-direction:column;
+    padding-bottom:env(safe-area-inset-bottom); }
+  .sheet header { display:flex; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); }
+  .sheet header h2 { font-size:16px; flex:1; }
+  .sheet header .x { font-size:20px; padding:2px 10px; color:var(--dim); }
+  .sheet .body { overflow-y:auto; padding:10px 12px; }
+  .sheet .body p.note { color:var(--dim); font-size:11px; margin-bottom:8px; line-height:1.5; }
+
+  .cheatgrid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .cheatgrid button { border:1px solid #375; background:#0e1e14; border-radius:10px; padding:12px 8px;
+    font-size:13px; font-weight:700; color:#9f9; }
+  .cheatgrid button.tog.on { background:#1e4a2a; border-color:#6c6; box-shadow:0 0 8px rgba(100,255,120,.3); }
+  .cheatgrid button.danger { border-color:#733; background:#1e0e0e; color:#f99; }
+
+  .uwshop { display:flex; flex-direction:column; gap:8px; }
+  .uwrow { display:flex; align-items:center; gap:10px; border:1px solid var(--line); border-radius:12px;
+    padding:10px; background:var(--panel2); }
+  .uwrow .ic { font-size:26px; }
+  .uwrow .tx { flex:1; } .uwrow .tx b { font-size:13px; } .uwrow .tx div { font-size:11px; color:var(--dim); }
+  .uwrow .buy { border:1px solid var(--gem); color:var(--gem); border-radius:8px; padding:8px 12px; font-weight:700; font-size:12px; }
+  .uwrow.owned .buy { border-color:#4c6; color:#4c6; }
+
+  /* ---------- リザルト ---------- */
+  #over { align-items:center; justify-content:center; gap:10px;
+    background:radial-gradient(ellipse at 50% 40%, #201025 0%, #07070f 70%); }
+  #over h2 { font-size:26px; color:#ff6b8a; letter-spacing:3px; }
+  #over .res { font-size:15px; line-height:2; text-align:center; }
+  #toast { position:absolute; top:18%; left:50%; transform:translateX(-50%); background:rgba(20,20,45,.92);
+    border:1px solid var(--accent); color:#cdd6ff; padding:8px 18px; border-radius:20px; font-size:13px;
+    opacity:0; transition:opacity .25s; pointer-events:none; z-index:50; white-space:nowrap; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ホーム -->
+  <div id="home" class="screen active">
+    <h1>NEON TOWER</h1>
+    <div class="sub">〜 じぶん専用タワーディフェンス 〜</div>
+    <div class="home-stats">
+      <span class="c-coin">🪙 <span id="homeCoins">0</span></span>
+      <span class="c-gem">💎 <span id="homeGems">0</span></span>
+      <span>🏆 最高 W<span id="homeBest">0</span></span>
+    </div>
+    <button class="bigbtn primary" id="btnStart">⚔️ バトル開始</button>
+    <button class="bigbtn" id="btnWorkshop">🔧 ワークショップ(永久強化)</button>
+    <button class="bigbtn" id="btnUW">☄️ アルティメット武器</button>
+    <button class="bigbtn cheat" id="btnCheatHome">🧪 チートメニュー</button>
+  </div>
+
+  <!-- ゲーム -->
+  <div id="game" class="screen">
+    <div id="hud">
+      <span class="stat wave">W<span id="hWave">1</span></span>
+      <span class="stat c-cash">$<span id="hCash">0</span></span>
+      <span class="stat c-coin">🪙<span id="hCoins">0</span></span>
+      <span class="stat c-gem">💎<span id="hGems">0</span></span>
+      <span class="spacer"></span>
+      <button class="iconbtn" id="btnSpeed">▶×1</button>
+      <button class="iconbtn" id="btnCheatGame">🧪</button>
+      <button class="iconbtn" id="btnQuit">🏠</button>
+    </div>
+    <div id="canvasWrap">
+      <canvas id="cv"></canvas>
+      <div id="uwbar"></div>
+      <div id="cheatBadge">CHEAT ON</div>
+    </div>
+    <div id="panel">
+      <div id="tabs">
+        <button data-tab="attack" class="on">⚔️ 攻撃</button>
+        <button data-tab="defense">🛡️ 防御</button>
+        <button data-tab="utility">⚙️ ユーティリティ</button>
+      </div>
+      <div id="upList"></div>
+    </div>
+  </div>
+
+  <!-- リザルト -->
+  <div id="over" class="screen">
+    <h2>GAME OVER</h2>
+    <div class="res" id="overRes"></div>
+    <button class="bigbtn primary" id="btnRetry">もう一度</button>
+    <button class="bigbtn" id="btnHome">ホームへ</button>
+  </div>
+
+  <!-- ワークショップ -->
+  <div class="modal" id="mWorkshop">
+    <div class="sheet">
+      <header><h2>🔧 ワークショップ <span class="c-coin" style="font-size:13px">🪙<span id="wsCoins">0</span></span></h2>
+        <button class="x" data-close="mWorkshop">✕</button></header>
+      <div id="tabsWs" style="display:flex; border-bottom:1px solid var(--line)">
+        <button data-tab="attack" class="on" style="flex:1;padding:10px;font-size:13px;font-weight:700">⚔️ 攻撃</button>
+        <button data-tab="defense" style="flex:1;padding:10px;font-size:13px;font-weight:700">🛡️ 防御</button>
+        <button data-tab="utility" style="flex:1;padding:10px;font-size:13px;font-weight:700">⚙️ 実用</button>
+      </div>
+      <div class="body">
+        <p class="note">コインで買う永久強化。バトルをまたいで効果が続きます。</p>
+        <div id="wsList" style="display:grid; grid-template-columns:1fr 1fr; gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- アルティメット武器 -->
+  <div class="modal" id="mUW">
+    <div class="sheet">
+      <header><h2>☄️ アルティメット武器 <span class="c-gem" style="font-size:13px">💎<span id="uwGems">0</span></span></h2>
+        <button class="x" data-close="mUW">✕</button></header>
+      <div class="body">
+        <p class="note">ジェムで解放すると、バトル中に自動発動する超強力な武器。</p>
+        <div class="uwshop" id="uwShop"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- チート -->
+  <div class="modal" id="mCheat">
+    <div class="sheet">
+      <header><h2>🧪 チートメニュー</h2><button class="x" data-close="mCheat">✕</button></header>
+      <div class="body">
+        <p class="note">じぶん専用ゲームなので使い放題!リソース追加・無敵など。</p>
+        <div class="cheatgrid">
+          <button id="chCash">💵 キャッシュ +100K</button>
+          <button id="chCashBig">💵 キャッシュ +100M</button>
+          <button id="chCoin">🪙 コイン +10K</button>
+          <button id="chCoinBig">🪙 コイン +1M</button>
+          <button id="chGem">💎 ジェム +1,000</button>
+          <button id="chHeal">❤️ タワー全回復</button>
+          <button id="chGod" class="tog">🛡️ ゴッドモード</button>
+          <button id="chOneShot" class="tog">💥 一撃必殺</button>
+          <button id="chWave">⏩ +10ウェーブ</button>
+          <button id="chUWAll">☄️ UW全解放</button>
+          <button id="chReset" class="danger" style="grid-column:1/-1">🗑️ セーブデータ初期化</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================
+   NEON TOWER — The Tower風・じぶん専用タワーディフェンス
+   ========================================================= */
+
+// ---------- ユーティリティ ----------
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const rand = (a,b) => a + Math.random()*(b-a);
+const TAU = Math.PI*2;
+
+const SUFFIX = ["","K","M","B","T","q","Q","s","S"];
+function fmt(n){
+  if (!isFinite(n)) return "∞";
+  if (n < 0) return "-"+fmt(-n);
+  if (n < 1000) return (n===Math.floor(n)) ? String(n) : n.toFixed(1);
+  let i=0;
+  while (n >= 1000 && i < SUFFIX.length-1){ n/=1000; i++; }
+  return (n>=100 ? n.toFixed(0) : n.toFixed(1)) + SUFFIX[i];
+}
+function toast(msg){
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.opacity = 1;
+  clearTimeout(t._tm);
+  t._tm = setTimeout(()=>{ t.style.opacity = 0; }, 1400);
+}
+
+// ---------- セーブデータ ----------
+const SAVE_KEY = "neonTowerSave_v1";
+let meta = {
+  coins: 100, gems: 200, bestWave: 0,
+  ws: {},              // ワークショップのレベル
+  uw: {},              // 解放済みアルティメット武器
+  cheat: { god:false, oneShot:false },
+};
+function save(){ try { localStorage.setItem(SAVE_KEY, JSON.stringify(meta)); } catch(e){} }
+function load(){
+  try {
+    const d = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if (d) meta = Object.assign(meta, d);
+  } catch(e){}
+}
+load();
+
+// ---------- バトル中アップグレード定義(キャッシュ) ----------
+// info内から計算済みステータスを参照するためのヘルパー
+const cur = () => S || { atkSpeed:0, regen:0, defAbs:0, cashWave:0 };
+// base,g: コストとその成長率 / max: 最大レベル
+const RUN_UPG = {
+  attack: [
+    { id:"damage",      name:"ダメージ",           base:6,   g:1.22, max:999, info:l=>"攻撃力 +"+Math.round(l*35)+"%" },
+    { id:"atkSpeed",    name:"攻撃速度",           base:12,  g:1.26, max:99,  info:l=>"+"+(l*8)+"% (毎秒"+cur().atkSpeed.toFixed(2)+"発)" },
+    { id:"critChance",  name:"クリティカル率",     base:15,  g:1.28, max:38,  info:l=>(5+l*2)+"%" },
+    { id:"critFactor",  name:"クリティカル倍率",   base:22,  g:1.30, max:99,  info:l=>"×"+(1.6+l*0.15).toFixed(2) },
+    { id:"range",       name:"射程",               base:18,  g:1.35, max:25,  info:l=>"+"+(l*12)+"px" },
+    { id:"multiChance", name:"マルチショット率",   base:80,  g:1.34, max:25,  info:l=>(l*3)+"%" },
+    { id:"multiTgt",    name:"マルチショット数",   base:300, g:2.1,  max:4,   info:l=>(2+l)+"体同時" },
+    { id:"rapidChance", name:"ラピッドファイア率", base:120, g:1.36, max:25,  info:l=>(l*2)+"% で連射" },
+    { id:"bounce",      name:"バウンスショット",   base:250, g:2.0,  max:5,   info:l=>l+"回 跳ね返り" },
+  ],
+  defense: [
+    { id:"health",   name:"体力",             base:8,   g:1.22, max:999, info:l=>"最大HP +"+Math.round(l*30)+"%" },
+    { id:"regen",    name:"体力回復",         base:14,  g:1.26, max:199, info:l=>"+"+fmt(cur().regen)+"/秒" },
+    { id:"defPct",   name:"防御率",           base:20,  g:1.30, max:40,  info:l=>(l*1.5).toFixed(1)+"% 軽減" },
+    { id:"defAbs",   name:"固定防御",         base:16,  g:1.28, max:199, info:l=>"被ダメ -"+fmt(cur().defAbs) },
+    { id:"thorns",   name:"トゲ(反射)",     base:60,  g:1.34, max:25,  info:l=>(l*4)+"% 反射" },
+    { id:"lifesteal",name:"ライフスティール", base:150, g:1.4,  max:20,  info:l=>(l*0.4).toFixed(1)+"% 吸収" },
+    { id:"knockback",name:"ノックバック",     base:90,  g:1.5,  max:10,  info:l=>"強さ "+l },
+  ],
+  utility: [
+    { id:"cashBonus", name:"キャッシュボーナス", base:15,  g:1.30, max:99, info:l=>"獲得 +"+(l*8)+"%" },
+    { id:"cashWave",  name:"ウェーブ報酬",       base:12,  g:1.28, max:199,info:l=>"+$"+fmt(cur().cashWave)+"/W" },
+    { id:"coinKill",  name:"コイン/キル",        base:50,  g:1.38, max:50, info:l=>"+"+(l*20)+"%" },
+    { id:"freeUp",    name:"無料アップグレード", base:100, g:1.4,  max:30, info:l=>l+"% で無料" },
+    { id:"interest",  name:"利子",               base:80,  g:1.45, max:10, info:l=>l+"%/W (上限あり)" },
+    { id:"waveSkip",  name:"ウェーブスキップ",   base:200, g:1.5,  max:15, info:l=>(l*2)+"% でスキップ" },
+  ],
+};
+
+// ---------- ワークショップ定義(コイン・永久) ----------
+const WS_UPG = {
+  attack: [
+    { id:"wDamage",  name:"基礎ダメージ",     base:20, g:1.35, max:60, info:l=>"+"+l*4 },
+    { id:"wAtkSpd",  name:"基礎攻撃速度",     base:30, g:1.38, max:40, info:l=>"+"+(l*4)+"%" },
+    { id:"wCrit",    name:"クリティカル率",   base:40, g:1.40, max:30, info:l=>"+"+(l*0.5).toFixed(1)+"%" },
+    { id:"wCritF",   name:"クリティカル倍率", base:60, g:1.42, max:30, info:l=>"+"+(l*0.05).toFixed(2) },
+    { id:"wRange",   name:"基礎射程",         base:50, g:1.45, max:20, info:l=>"+"+l*4+"px" },
+  ],
+  defense: [
+    { id:"wHealth",  name:"基礎体力",   base:20, g:1.35, max:60, info:l=>"+"+l*40 },
+    { id:"wRegen",   name:"基礎回復",   base:30, g:1.38, max:40, info:l=>"+"+(l*0.8).toFixed(1)+"/秒" },
+    { id:"wDefPct",  name:"基礎防御率", base:60, g:1.45, max:30, info:l=>"+"+(l*0.5).toFixed(1)+"%" },
+    { id:"wDefAbs",  name:"基礎固定防御",base:40, g:1.40, max:40, info:l=>"+"+l*2 },
+  ],
+  utility: [
+    { id:"wStartCash", name:"開始キャッシュ",   base:25, g:1.35, max:50, info:l=>"+$"+l*30 },
+    { id:"wCashMult",  name:"キャッシュ倍率",   base:40, g:1.40, max:40, info:l=>"+"+(l*5)+"%" },
+    { id:"wCoinMult",  name:"コイン獲得倍率",   base:50, g:1.42, max:40, info:l=>"+"+(l*5)+"%" },
+    { id:"wWaveCash",  name:"基礎ウェーブ報酬", base:30, g:1.38, max:40, info:l=>"+$"+l*8 },
+  ],
+};
+
+// ---------- アルティメット武器 ----------
+const UW_DEFS = [
+  { id:"deathWave",  icon:"🌊", name:"デスウェーブ",     cost:300, cd:45, desc:"45秒ごとに全画面の敵へ大ダメージの波" },
+  { id:"goldenTower",icon:"👑", name:"ゴールデンタワー", cost:300, cd:60, dur:15, desc:"60秒ごとに15秒間キャッシュ獲得×4" },
+  { id:"blackHole",  icon:"🕳️", name:"ブラックホール",   cost:400, cd:40, dur:6,  desc:"40秒ごとに敵を吸い込み動きを止める" },
+  { id:"chronoField",icon:"⏳", name:"クロノフィールド", cost:350, cd:50, dur:12, desc:"50秒ごとに12秒間 敵全体を50%減速" },
+];
+
+// ---------- 敵定義(The Tower準拠) ----------
+// hp/spd/dmg/cash はウェーブ基準値への倍率
+const ENEMY_DEFS = {
+  basic:     { shape:"square",   size:11, color:"#ff6b6b", hp:1.0,  spd:1.0,  dmg:1.0, cash:1.0 },
+  fast:      { shape:"triangle", size:9,  color:"#ffe14a", hp:0.55, spd:2.4,  dmg:0.7, cash:1.2 },
+  tank:      { shape:"pentagon", size:16, color:"#4ac6ff", hp:4.5,  spd:0.5,  dmg:2.2, cash:2.5 },
+  ranged:    { shape:"diamond",  size:10, color:"#ff9d4a", hp:0.9,  spd:0.9,  dmg:0.9, cash:1.5, ranged:180 },
+  protector: { shape:"hexagon",  size:14, color:"#6bffd8", hp:3.0,  spd:0.75, dmg:1.5, cash:3.0, aura:110 },
+  vampire:   { shape:"cross",    size:13, color:"#b96bff", hp:6.0,  spd:0.8,  dmg:1.2, cash:8.0, ranged:150, vampire:true, elite:true },
+  ray:       { shape:"star",     size:13, color:"#ff4ad8", hp:5.0,  spd:0.7,  dmg:0.5, cash:8.0, ranged:260, ray:true, elite:true },
+  scatter:   { shape:"octagon",  size:15, color:"#8aff4a", hp:5.0,  spd:0.9,  dmg:1.2, cash:8.0, scatter:2, elite:true },
+  boss:      { shape:"boss",     size:30, color:"#ff3355", hp:28,   spd:0.45, dmg:5.0, cash:25,  boss:true },
+};
+
+// ---------- バトル状態 ----------
+let run = null;   // 現在のラン
+let S = null;     // 計算済みステータス
+let inGame = false;
+
+function newRun(){
+  const ws = id => meta.ws[id] || 0;
+  return {
+    wave: 1, cash: 100 + ws("wStartCash")*30, hp: 0,
+    upg: {}, enemies: [], bullets: [], ebullets: [], fx: [], texts: [],
+    spawnQueue: [], spawnTimer: 0, waveDelay: 1.2,
+    time: 0, kills: 0, coinsEarned: 0, revived: false,
+    uwTimers: {}, uwActive: {}, waveProtector: false,
+  };
+}
+
+// ワークショップ+バトル中レベル → 実効ステータス
+function computeStats(){
+  const u = id => (run && run.upg[id]) || 0;
+  const w = id => meta.ws[id] || 0;
+  const baseDmg = 15 + w("wDamage")*4;
+  const baseHP  = 150 + w("wHealth")*40;
+  S = {
+    damage:    baseDmg * (1 + u("damage")*0.35),
+    atkSpeed:  (1.4 + w("wAtkSpd")*0.056) * (1 + u("atkSpeed")*0.08),
+    critChance: clamp(0.05 + w("wCrit")*0.005 + u("critChance")*0.02, 0, 0.85),
+    critFactor: 1.6 + w("wCritF")*0.05 + u("critFactor")*0.15,
+    range:     150 + w("wRange")*4 + u("range")*12,
+    multiChance: u("multiChance")*0.03,
+    multiTgt:  2 + u("multiTgt"),
+    rapidChance: u("rapidChance")*0.02,
+    bounce:    u("bounce"),
+    maxHP:     baseHP * (1 + u("health")*0.30),
+    regen:     (1.5 + w("wRegen")*0.8) * (1 + u("regen")*0.25),
+    defPct:    clamp(w("wDefPct")*0.005 + u("defPct")*0.015, 0, 0.8),
+    defAbs:    w("wDefAbs")*2 + u("defAbs")*3*(1+u("defAbs")*0.05),
+    thorns:    u("thorns")*0.04,
+    lifesteal: u("lifesteal")*0.004,
+    knockback: u("knockback"),
+    cashMult:  (1 + w("wCashMult")*0.05) * (1 + u("cashBonus")*0.08),
+    cashWave:  (10 + w("wWaveCash")*8) * (1 + u("cashWave")*0.3),
+    coinMult:  (1 + w("wCoinMult")*0.05) * (1 + u("coinKill")*0.2),
+    freeUp:    u("freeUp")*0.01,
+    interest:  u("interest")*0.01,
+    waveSkip:  u("waveSkip")*0.02,
+  };
+}
+
+// ---------- キャンバス ----------
+const cv = $("cv"), ctx = cv.getContext("2d");
+let W=0, H=0, CX=0, CY=0, DPR=1;
+function resize(){
+  const r = $("canvasWrap").getBoundingClientRect();
+  DPR = Math.min(window.devicePixelRatio||1, 2);
+  W = r.width; H = r.height;
+  cv.width = W*DPR; cv.height = H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  CX = W/2; CY = H/2;
+}
+window.addEventListener("resize", resize);
+
+// ---------- ウェーブ生成 ----------
+function enemyBaseHp(w){ return 10 * (1 + 0.55*(w-1)) * Math.pow(1.07, w-1); }
+function enemyBaseDmg(w){ return 4 * (1 + 0.30*(w-1)) * Math.pow(1.035, w-1); }
+function enemyBaseCash(w){ return 3 * (1 + 0.22*(w-1)) * Math.pow(1.025, w-1); }
+function enemyBaseSpd(w){ return 26 + Math.min(30, w*0.5); }
+
+function buildWave(w){
+  const q = [];
+  if (w % 10 === 0){
+    // ボスウェーブ:ボス+取り巻き
+    q.push("boss");
+    const minions = 4 + Math.floor(w/10)*2;
+    for (let i=0;i<minions;i++) q.push(Math.random()<0.5 ? "basic" : "fast");
+  } else {
+    const count = Math.min(42, 7 + Math.floor(w*1.15));
+    for (let i=0;i<count;i++){
+      const r = Math.random();
+      let t = "basic";
+      if      (r < 0.16 && w>=3)  t = "fast";
+      else if (r < 0.28 && w>=5)  t = "tank";
+      else if (r < 0.42 && w>=4)  t = "ranged";
+      else                        t = (r<0.55 && w>=3) ? "fast" : "basic";
+      q.push(t);
+    }
+    if (w >= 8 && Math.random() < 0.5) q.push("protector");           // プロテクターは1体まで
+    if (w >= 12 && Math.random() < 0.30){                             // エリートは1体まで
+      const es = ["vampire","ray","scatter"];
+      q.push(es[Math.floor(Math.random()*es.length)]);
+    }
+  }
+  // シャッフル
+  for (let i=q.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [q[i],q[j]]=[q[j],q[i]]; }
+  return q;
+}
+
+function spawnEnemy(type, x, y, hpMul){
+  const d = ENEMY_DEFS[type];
+  const w = run.wave;
+  if (x === undefined){
+    // 画面外周からスポーン
+    const a = Math.random()*TAU;
+    const rr = Math.hypot(W,H)/2 + 30;
+    x = CX + Math.cos(a)*rr; y = CY + Math.sin(a)*rr;
+  }
+  const hp = enemyBaseHp(w) * d.hp * (hpMul||1);
+  run.enemies.push({
+    type, x, y, def:d,
+    hp, maxHp: hp,
+    spd: enemyBaseSpd(w) * d.spd * rand(0.9,1.1),
+    dmg: enemyBaseDmg(w) * d.dmg,
+    cash: enemyBaseCash(w) * d.cash,
+    atkTimer: rand(0,0.5), rot: rand(0,TAU), rotSpd: rand(-1.5,1.5),
+    slowT: 0, holdT: 0, gen: 0,
+  });
+}
+
+function startWave(){
+  computeStats();
+  // 利子(所持キャッシュの数% 上限=ウェーブ報酬×10)
+  if (S.interest > 0){
+    const gain = Math.min(run.cash * S.interest, S.cashWave * 10);
+    if (gain > 0){ run.cash += gain; addText(CX, CY-60, "+$"+fmt(gain)+" 利子", "#7cff6b"); }
+  }
+  // ウェーブスキップ
+  if (Math.random() < S.waveSkip && run.wave % 10 !== 0){
+    run.cash += S.cashWave;
+    earnCoins(1 + run.wave*0.1);
+    addText(CX, CY-40, "⏩ ウェーブスキップ!", "#ffc04a");
+    run.wave++;
+    startWave();
+    return;
+  }
+  run.spawnQueue = buildWave(run.wave);
+  run.spawnTimer = 0;
+}
+
+// ---------- 報酬 ----------
+function cashGain(v){
+  let m = S.cashMult;
+  if (run.uwActive.goldenTower > 0) m *= 4;
+  run.cash += v * m;
+}
+function earnCoins(v){
+  const c = v * S.coinMult;
+  run.coinsEarned += c;
+  meta.coins += c;
+}
+
+// ---------- ダメージ・キル ----------
+function protectedMul(e){
+  // 近くのプロテクターがいる敵は被ダメ40%軽減
+  if (e.def.aura) return 1;
+  for (const p of run.enemies){
+    if (p.def.aura && Math.hypot(p.x-e.x, p.y-e.y) < p.def.aura) return 0.6;
+  }
+  return 1;
+}
+function hitEnemy(e, dmg, isCrit){
+  if (meta.cheat.oneShot) dmg = e.hp + 1;
+  dmg *= protectedMul(e);
+  e.hp -= dmg;
+  addText(e.x, e.y-14, fmt(dmg), isCrit ? "#ffe14a" : "#ffffff", isCrit?13:10);
+  if (S.lifesteal > 0 && run.hp < S.maxHP){
+    run.hp = Math.min(S.maxHP, run.hp + dmg*S.lifesteal);
+  }
+  if (e.hp <= 0) killEnemy(e);
+}
+function killEnemy(e){
+  const i = run.enemies.indexOf(e);
+  if (i < 0) return;
+  run.enemies.splice(i,1);
+  run.kills++;
+  cashGain(e.cash);
+  earnCoins(e.def.boss ? 5 + run.wave*0.25 : (e.def.elite ? 2 : 0.12 + run.wave*0.012));
+  addFx(e.x, e.y, e.def.color);
+  // スキャッター:分裂
+  if (e.def.scatter && e.gen < 2){
+    for (let k=0;k<e.def.scatter;k++){
+      spawnEnemy("basic", e.x+rand(-14,14), e.y+rand(-14,14), 0.35);
+      const c = run.enemies[run.enemies.length-1];
+      c.gen = e.gen+1; c.cash *= 0.3;
+    }
+  }
+}
+function damageTower(v){
+  if (meta.cheat.god) return;
+  v = Math.max(1, v*(1-S.defPct) - S.defAbs);
+  run.hp -= v;
+  if (run.hp <= 0){
+    if (!run.revived && meta.gems >= 100){
+      // 自動リバイブ確認
+      if (confirm("💎100 で復活しますか?(HP全回復+敵一掃)")){
+        meta.gems -= 100; run.revived = true;
+        run.hp = S.maxHP;
+        for (const e of [...run.enemies]) killEnemy(e);
+        toast("復活しました!");
+        save(); syncHud();
+        return;
+      }
+    }
+    gameOver();
+  }
+}
+
+// ---------- タワー攻撃 ----------
+let shootTimer = 0;
+function towerShoot(dt){
+  shootTimer -= dt;
+  if (shootTimer > 0) return;
+  const targets = run.enemies
+    .filter(e => Math.hypot(e.x-CX, e.y-CY) <= S.range + e.def.size)
+    .sort((a,b) => Math.hypot(a.x-CX,a.y-CY) - Math.hypot(b.x-CX,b.y-CY));
+  if (!targets.length) { shootTimer = 0.05; return; }
+
+  let n = 1;
+  if (Math.random() < S.multiChance) n = Math.min(S.multiTgt, targets.length);
+  for (let i=0;i<n;i++) fireBullet(targets[i % targets.length]);
+
+  let cd = 1/S.atkSpeed;
+  if (Math.random() < S.rapidChance) cd *= 0.25;
+  shootTimer = cd;
+}
+function fireBullet(target){
+  const isCrit = Math.random() < S.critChance;
+  run.bullets.push({
+    x:CX, y:CY, t:target,
+    dmg: S.damage * (isCrit ? S.critFactor : 1),
+    crit: isCrit, spd: 460, bounce: S.bounce, hitSet: new Set(),
+  });
+}
+
+// ---------- アルティメット武器 ----------
+function initUW(){
+  const bar = $("uwbar");
+  bar.innerHTML = "";
+  for (const d of UW_DEFS){
+    if (!meta.uw[d.id]) continue;
+    run.uwTimers[d.id] = d.cd * 0.5;   // 最初は半分の待ち
+    run.uwActive[d.id] = 0;
+    const el = document.createElement("div");
+    el.className = "uwicon"; el.id = "uw_"+d.id;
+    el.innerHTML = d.icon + '<div class="cd"></div>';
+    bar.appendChild(el);
+  }
+}
+function tickUW(dt){
+  for (const d of UW_DEFS){
+    if (!meta.uw[d.id]) continue;
+    if (run.uwActive[d.id] > 0) run.uwActive[d.id] -= dt;
+    run.uwTimers[d.id] -= dt;
+    if (run.uwTimers[d.id] <= 0){
+      run.uwTimers[d.id] = d.cd;
+      activateUW(d);
+    }
+    const el = $("uw_"+d.id);
+    if (el){
+      const frac = clamp(run.uwTimers[d.id]/d.cd, 0, 1);
+      el.querySelector(".cd").style.height = (frac*100)+"%";
+      el.classList.toggle("ready", run.uwActive[d.id] > 0);
+    }
+  }
+}
+function activateUW(d){
+  switch(d.id){
+    case "deathWave": {
+      const dmg = S.damage * 8;
+      run.fx.push({kind:"ring", x:CX, y:CY, r:10, max:Math.hypot(W,H)/2+40, color:"#ff4ad8", t:0});
+      for (const e of [...run.enemies]) hitEnemy(e, dmg, false);
+      toast("🌊 デスウェーブ!");
+      break;
+    }
+    case "goldenTower":
+      run.uwActive.goldenTower = d.dur;
+      toast("👑 ゴールデンタワー! キャッシュ×4");
+      break;
+    case "blackHole": {
+      // 敵が一番多い場所に発生
+      let bx=CX+rand(-100,100), by=CY+rand(-100,100);
+      if (run.enemies.length){
+        const e = run.enemies[Math.floor(Math.random()*run.enemies.length)];
+        bx=e.x; by=e.y;
+      }
+      run.fx.push({kind:"hole", x:bx, y:by, r:220, t:d.dur, color:"#b96bff"});
+      toast("🕳️ ブラックホール!");
+      break;
+    }
+    case "chronoField":
+      run.uwActive.chronoField = d.dur;
+      toast("⏳ クロノフィールド! 敵50%減速");
+      break;
+  }
+}
+
+// ---------- エフェクト・テキスト ----------
+function addFx(x,y,color){
+  if (run.fx.length > 60) return;
+  run.fx.push({kind:"pop", x, y, r:4, max:18, color, t:0});
+}
+function addText(x,y,str,color,size){
+  if (run.texts.length > 40) run.texts.shift();
+  run.texts.push({x, y, str, color, size:size||10, t:0.9});
+}
+
+// ---------- メインループ ----------
+let lastT = 0, speedMul = 1;
+function loop(t){
+  if (!inGame) return;
+  requestAnimationFrame(loop);
+  let dt = Math.min(0.05, (t-lastT)/1000);
+  lastT = t;
+  dt *= speedMul;
+  update(dt);
+  draw();
+}
+
+function update(dt){
+  run.time += dt;
+  computeStatsIfDirty();
+
+  // 回復
+  run.hp = Math.min(S.maxHP, run.hp + S.regen*dt);
+
+  // スポーン
+  if (run.spawnQueue.length){
+    run.spawnTimer -= dt;
+    if (run.spawnTimer <= 0){
+      spawnEnemy(run.spawnQueue.shift());
+      run.spawnTimer = Math.max(0.12, 0.6 - run.wave*0.008);
+    }
+  } else if (!run.enemies.length){
+    // ウェーブクリア
+    run.waveDelay -= dt;
+    if (run.waveDelay <= 0){
+      cashGain(S.cashWave / S.cashMult);  // ウェーブ報酬(cashMultはcashGain内で掛かる)
+      earnCoins(0.5 + run.wave*0.05);
+      run.wave++;
+      run.waveDelay = 1.0;
+      startWave();
+      syncHud();
+    }
+  }
+
+  // ブラックホール・クロノの係数
+  const chrono = run.uwActive.chronoField > 0 ? 0.5 : 1;
+  const holes = run.fx.filter(f => f.kind==="hole" && f.t>0);
+
+  // 敵の移動と攻撃
+  for (const e of [...run.enemies]){
+    let sp = e.spd * chrono;
+    if (e.slowT > 0){ e.slowT -= dt; sp *= 0.5; }
+    e.rot += e.rotSpd*dt;
+
+    let held = false;
+    for (const h of holes){
+      const d = Math.hypot(h.x-e.x, h.y-e.y);
+      if (d < h.r && !e.def.boss){
+        // 吸い込み
+        const pull = 90*dt;
+        e.x += (h.x-e.x)/Math.max(d,1)*pull;
+        e.y += (h.y-e.y)/Math.max(d,1)*pull;
+        held = true;
+      }
+    }
+    if (held) continue;
+
+    const dx = CX-e.x, dy = CY-e.y;
+    const dist = Math.hypot(dx,dy);
+    const stopAt = e.def.ranged ? e.def.ranged : 30 + e.def.size;
+
+    if (dist > stopAt){
+      e.x += dx/dist*sp*dt;
+      e.y += dy/dist*sp*dt;
+    } else {
+      // 攻撃
+      e.atkTimer -= dt;
+      if (e.atkTimer <= 0){
+        if (e.def.ray){
+          e.atkTimer = 0.25;
+          damageTower(e.dmg*0.25);
+          e.beamT = 0.15;
+        } else if (e.def.ranged){
+          e.atkTimer = 1.6;
+          const a = Math.atan2(dy,dx);
+          run.ebullets.push({x:e.x, y:e.y, vx:Math.cos(a)*170, vy:Math.sin(a)*170, dmg:e.dmg, vamp:e.def.vampire, src:e});
+        } else {
+          e.atkTimer = 0.8;
+          damageTower(e.dmg);
+          // トゲ反射
+          if (S.thorns > 0) hitEnemy(e, e.dmg*S.thorns*3, false);
+          // ノックバック
+          if (S.knockback > 0 && !e.def.boss){
+            e.x -= dx/dist * S.knockback*8;
+            e.y -= dy/dist * S.knockback*8;
+          }
+        }
+      }
+    }
+  }
+
+  // タワーの弾
+  towerShoot(dt);
+  for (const b of [...run.bullets]){
+    // ターゲット追尾(死んでいたら近くを再索敵)
+    if (!b.t || b.t.hp <= 0 || !run.enemies.includes(b.t)){
+      b.t = nearestEnemy(b.x, b.y, b.hitSet);
+      if (!b.t){ removeItem(run.bullets, b); continue; }
+    }
+    const dx = b.t.x-b.x, dy = b.t.y-b.y;
+    const d = Math.hypot(dx,dy);
+    if (d < b.t.def.size + 5){
+      hitEnemy(b.t, b.dmg, b.crit);
+      b.hitSet.add(b.t);
+      if (b.bounce > 0){
+        b.bounce--;
+        b.dmg *= 0.8;
+        b.t = nearestEnemy(b.x, b.y, b.hitSet, 170);
+        if (!b.t) removeItem(run.bullets, b);
+      } else {
+        removeItem(run.bullets, b);
+      }
+      continue;
+    }
+    b.x += dx/d*b.spd*dt;
+    b.y += dy/d*b.spd*dt;
+  }
+
+  // 敵の弾
+  for (const b of [...run.ebullets]){
+    b.x += b.vx*dt; b.y += b.vy*dt;
+    const d = Math.hypot(b.x-CX, b.y-CY);
+    if (d < 26){
+      damageTower(b.dmg);
+      if (b.vamp && b.src && run.enemies.includes(b.src)){
+        b.src.hp = Math.min(b.src.maxHp, b.src.hp + b.dmg*2); // ヴァンパイア吸収
+      }
+      removeItem(run.ebullets, b);
+    } else if (b.x<-40||b.x>W+40||b.y<-40||b.y>H+40){
+      removeItem(run.ebullets, b);
+    }
+  }
+
+  // UW
+  tickUW(dt);
+
+  // エフェクト
+  for (const f of [...run.fx]){
+    if (f.kind === "pop"){ f.t += dt*3; f.r = 4 + f.t*14; if (f.t>=1) removeItem(run.fx,f); }
+    else if (f.kind === "ring"){ f.r += 900*dt; if (f.r > f.max) removeItem(run.fx,f); }
+    else if (f.kind === "hole"){ f.t -= dt; if (f.t<=0) removeItem(run.fx,f); }
+  }
+  for (const tx of [...run.texts]){
+    tx.t -= dt; tx.y -= 20*dt;
+    if (tx.t <= 0) removeItem(run.texts, tx);
+  }
+
+  hudTimer -= dt;
+  if (hudTimer <= 0){ hudTimer = 0.2; syncHud(); refreshUpButtons(); }
+}
+
+function nearestEnemy(x, y, exclude, maxDist){
+  let best=null, bd=maxDist||1e9;
+  for (const e of run.enemies){
+    if (exclude && exclude.has(e)) continue;
+    const d = Math.hypot(e.x-x, e.y-y);
+    if (d < bd){ bd=d; best=e; }
+  }
+  return best;
+}
+function removeItem(arr, it){ const i=arr.indexOf(it); if (i>=0) arr.splice(i,1); }
+
+// ---------- 描画 ----------
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  // 背景グリッド
+  ctx.strokeStyle = "rgba(60,60,120,0.12)";
+  ctx.lineWidth = 1;
+  const gs = 40;
+  ctx.beginPath();
+  for (let x = (CX%gs); x < W; x += gs){ ctx.moveTo(x,0); ctx.lineTo(x,H); }
+  for (let y = (CY%gs); y < H; y += gs){ ctx.moveTo(0,y); ctx.lineTo(W,y); }
+  ctx.stroke();
+
+  // 射程円
+  ctx.strokeStyle = "rgba(107,140,255,0.25)";
+  ctx.setLineDash([6,6]);
+  ctx.beginPath(); ctx.arc(CX,CY,S.range,0,TAU); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // クロノフィールド
+  if (run.uwActive.chronoField > 0){
+    ctx.fillStyle = "rgba(74,198,255,0.06)";
+    ctx.beginPath(); ctx.arc(CX,CY,Math.max(W,H),0,TAU); ctx.fill();
+  }
+
+  // エフェクト(下層)
+  for (const f of run.fx){
+    if (f.kind === "hole"){
+      const g = ctx.createRadialGradient(f.x,f.y,4,f.x,f.y,f.r*0.7);
+      g.addColorStop(0,"rgba(30,0,60,0.9)");
+      g.addColorStop(1,"rgba(120,60,255,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(f.x,f.y,f.r*0.7,0,TAU); ctx.fill();
+    }
+  }
+
+  // タワー
+  const golden = run.uwActive.goldenTower > 0;
+  ctx.save();
+  ctx.translate(CX,CY);
+  ctx.rotate(run.time*0.4);
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = golden ? "#ffd54a" : "#6b8cff";
+  ctx.fillStyle = golden ? "#ffd54a" : "#25255a";
+  ctx.strokeStyle = golden ? "#fff2b0" : "#8caaff";
+  ctx.lineWidth = 2;
+  polygon(0,0,24,6);
+  ctx.fill(); ctx.stroke();
+  ctx.rotate(-run.time*0.8);
+  ctx.fillStyle = golden ? "#fff" : "#aaccff";
+  polygon(0,0,10,6);
+  ctx.fill();
+  ctx.restore();
+  ctx.shadowBlur = 0;
+
+  // HPバー
+  const hw = 70;
+  ctx.fillStyle = "rgba(0,0,0,.6)";
+  ctx.fillRect(CX-hw/2, CY+34, hw, 7);
+  ctx.fillStyle = meta.cheat.god ? "#8f8" : "#ff5a7a";
+  ctx.fillRect(CX-hw/2, CY+34, hw*clamp(run.hp/S.maxHP,0,1), 7);
+  ctx.fillStyle = "#fff";
+  ctx.font = "9px sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText(fmt(Math.ceil(run.hp))+" / "+fmt(S.maxHP), CX, CY+52);
+
+  // 敵
+  for (const e of run.enemies){
+    ctx.save();
+    ctx.translate(e.x,e.y);
+    ctx.shadowBlur = e.def.boss ? 24 : 10;
+    ctx.shadowColor = e.def.color;
+    ctx.strokeStyle = e.def.color;
+    ctx.fillStyle = e.def.color + "33";
+    ctx.lineWidth = e.def.boss ? 3 : 2;
+    ctx.rotate(e.rot);
+    drawShape(e.def.shape, e.def.size);
+    ctx.restore();
+    ctx.shadowBlur = 0;
+    // プロテクターのオーラ
+    if (e.def.aura){
+      ctx.strokeStyle = "rgba(107,255,216,0.3)";
+      ctx.beginPath(); ctx.arc(e.x,e.y,e.def.aura,0,TAU); ctx.stroke();
+    }
+    // レイのビーム
+    if (e.beamT > 0){
+      e.beamT -= 0.016;
+      ctx.strokeStyle = "rgba(255,74,216,0.7)";
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(e.x,e.y); ctx.lineTo(CX,CY); ctx.stroke();
+    }
+    // HPバー(削れているときだけ)
+    if (e.hp < e.maxHp){
+      const w2 = e.def.size*2;
+      ctx.fillStyle = "rgba(0,0,0,.5)";
+      ctx.fillRect(e.x-w2/2, e.y-e.def.size-8, w2, 3);
+      ctx.fillStyle = e.def.color;
+      ctx.fillRect(e.x-w2/2, e.y-e.def.size-8, w2*clamp(e.hp/e.maxHp,0,1), 3);
+    }
+  }
+
+  // 弾
+  ctx.fillStyle = "#cfe0ff";
+  ctx.shadowBlur = 8; ctx.shadowColor = "#6b8cff";
+  for (const b of run.bullets){
+    ctx.beginPath(); ctx.arc(b.x,b.y, b.crit?4:3, 0,TAU); ctx.fill();
+  }
+  ctx.fillStyle = "#ff9d4a"; ctx.shadowColor = "#ff9d4a";
+  for (const b of run.ebullets){
+    ctx.beginPath(); ctx.arc(b.x,b.y,3.5,0,TAU); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  // エフェクト(上層)
+  for (const f of run.fx){
+    if (f.kind === "pop"){
+      ctx.strokeStyle = f.color;
+      ctx.globalAlpha = 1-f.t;
+      ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,TAU); ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (f.kind === "ring"){
+      ctx.strokeStyle = f.color;
+      ctx.lineWidth = 6;
+      ctx.globalAlpha = clamp(1 - f.r/f.max, 0, 1);
+      ctx.beginPath(); ctx.arc(f.x,f.y,f.r,0,TAU); ctx.stroke();
+      ctx.globalAlpha = 1; ctx.lineWidth = 1;
+    }
+  }
+
+  // フロートテキスト
+  ctx.textAlign = "center";
+  for (const tx of run.texts){
+    ctx.globalAlpha = clamp(tx.t/0.9, 0, 1);
+    ctx.fillStyle = tx.color;
+    ctx.font = "bold "+tx.size+"px sans-serif";
+    ctx.fillText(tx.str, tx.x, tx.y);
+  }
+  ctx.globalAlpha = 1;
+
+  // ウェーブ進行表示
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  ctx.font = "10px sans-serif";
+  ctx.fillText("敵 残り " + (run.spawnQueue.length + run.enemies.length), CX, 14);
+}
+
+function polygon(x,y,r,n,rot){
+  ctx.beginPath();
+  for (let i=0;i<n;i++){
+    const a = (rot||0) + i/n*TAU - Math.PI/2;
+    const px = x+Math.cos(a)*r, py = y+Math.sin(a)*r;
+    i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+  }
+  ctx.closePath();
+}
+function drawShape(shape, s){
+  switch(shape){
+    case "square":  ctx.beginPath(); ctx.rect(-s,-s,s*2,s*2); ctx.closePath(); break;
+    case "triangle":polygon(0,0,s*1.2,3); break;
+    case "pentagon":polygon(0,0,s,5); break;
+    case "diamond": polygon(0,0,s*1.2,4); break;
+    case "hexagon": polygon(0,0,s,6); break;
+    case "octagon": polygon(0,0,s,8); break;
+    case "cross":
+      ctx.beginPath();
+      const t = s*0.4;
+      ctx.rect(-t/2,-s,t,s*2); ctx.rect(-s,-t/2,s*2,t);
+      break;
+    case "star":
+      ctx.beginPath();
+      for (let i=0;i<10;i++){
+        const rr = i%2===0 ? s*1.3 : s*0.55;
+        const a = i/10*TAU - Math.PI/2;
+        const px=Math.cos(a)*rr, py=Math.sin(a)*rr;
+        i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+      }
+      ctx.closePath();
+      break;
+    case "boss":
+      polygon(0,0,s,6);
+      ctx.fill(); ctx.stroke();
+      polygon(0,0,s*0.55,6);
+      break;
+  }
+  ctx.fill(); ctx.stroke();
+}
+
+// ---------- HUD/パネル ----------
+let hudTimer = 0;
+let statsDirty = true;
+function computeStatsIfDirty(){ if (statsDirty){ computeStats(); statsDirty = false; } }
+function syncHud(){
+  $("hWave").textContent = run ? run.wave : "-";
+  $("hCash").textContent = run ? fmt(run.cash) : "-";
+  $("hCoins").textContent = fmt(Math.floor(meta.coins));
+  $("hGems").textContent = fmt(Math.floor(meta.gems));
+  $("cheatBadge").style.display = (meta.cheat.god||meta.cheat.oneShot) ? "block" : "none";
+}
+function syncHome(){
+  $("homeCoins").textContent = fmt(Math.floor(meta.coins));
+  $("homeGems").textContent = fmt(Math.floor(meta.gems));
+  $("homeBest").textContent = meta.bestWave;
+}
+
+let curTab = "attack";
+function upCost(def, lvl){ return Math.ceil(def.base * Math.pow(def.g, lvl)); }
+
+function buildUpList(){
+  const list = $("upList");
+  list.innerHTML = "";
+  for (const def of RUN_UPG[curTab]){
+    const b = document.createElement("button");
+    b.className = "upbtn";
+    b.dataset.id = def.id;
+    b.addEventListener("click", ()=>buyRunUpg(def, b));
+    list.appendChild(b);
+  }
+  refreshUpButtons(true);
+}
+function refreshUpButtons(force){
+  const list = $("upList");
+  for (const b of list.children){
+    const def = RUN_UPG[curTab].find(d=>d.id===b.dataset.id);
+    if (!def) continue;
+    const lvl = run.upg[def.id]||0;
+    const maxed = lvl >= def.max;
+    const cost = upCost(def, lvl);
+    const can = maxed ? false : run.cash >= cost;
+    b.classList.toggle("max", maxed);
+    b.classList.toggle("cant", !can && !maxed);
+    b.innerHTML =
+      '<span class="nm">'+def.name+' <span class="lv">Lv'+lvl+(maxed?"/MAX":"")+'</span></span>'+
+      '<span class="vl">'+def.info(lvl)+'</span>'+
+      '<span class="cost">'+(maxed ? "MAX" : "$"+fmt(cost))+'</span>';
+  }
+}
+function buyRunUpg(def, btn){
+  const lvl = run.upg[def.id]||0;
+  if (lvl >= def.max) return;
+  let cost = upCost(def, lvl);
+  computeStatsIfDirty();
+  const free = Math.random() < S.freeUp;
+  if (!free && run.cash < cost) return;
+  if (!free) run.cash -= cost;
+  else addText(CX, CY-70, "🎁 無料アップグレード!", "#6bffd8", 12);
+  run.upg[def.id] = lvl+1;
+  statsDirty = true;
+  computeStatsIfDirty();
+  if (def.id === "health") run.hp = Math.min(S.maxHP, run.hp + S.maxHP*0.23); // HP上昇分を回復
+  syncHud();
+  refreshUpButtons();
+}
+
+// ワークショップUI
+let wsTab = "attack";
+function buildWsList(){
+  $("wsCoins").textContent = fmt(Math.floor(meta.coins));
+  const list = $("wsList");
+  list.innerHTML = "";
+  for (const def of WS_UPG[wsTab]){
+    const lvl = meta.ws[def.id]||0;
+    const maxed = lvl >= def.max;
+    const cost = upCost(def, lvl);
+    const b = document.createElement("button");
+    b.className = "upbtn coin" + (maxed?" max":"") + (meta.coins<cost&&!maxed?" cant":"");
+    b.innerHTML =
+      '<span class="nm">'+def.name+' <span class="lv">Lv'+lvl+(maxed?"/MAX":"")+'</span></span>'+
+      '<span class="vl">'+def.info(lvl)+'</span>'+
+      '<span class="cost">'+(maxed ? "MAX" : "🪙"+fmt(cost))+'</span>';
+    b.addEventListener("click", ()=>{
+      if (maxed || meta.coins < cost) return;
+      meta.coins -= cost;
+      meta.ws[def.id] = lvl+1;
+      statsDirty = true;
+      save(); buildWsList(); syncHome(); if (run) syncHud();
+    });
+    list.appendChild(b);
+  }
+}
+
+// UWショップUI
+function buildUwShop(){
+  $("uwGems").textContent = fmt(Math.floor(meta.gems));
+  const list = $("uwShop");
+  list.innerHTML = "";
+  for (const d of UW_DEFS){
+    const owned = !!meta.uw[d.id];
+    const row = document.createElement("div");
+    row.className = "uwrow" + (owned?" owned":"");
+    row.innerHTML =
+      '<span class="ic">'+d.icon+'</span>'+
+      '<span class="tx"><b>'+d.name+'</b><div>'+d.desc+'</div></span>'+
+      '<button class="buy">'+(owned ? "解放済み" : "💎"+d.cost)+'</button>';
+    row.querySelector(".buy").addEventListener("click", ()=>{
+      if (owned || meta.gems < d.cost) { if(!owned) toast("ジェムが足りません"); return; }
+      meta.gems -= d.cost;
+      meta.uw[d.id] = true;
+      save(); buildUwShop(); syncHome(); if (run) { initUW(); syncHud(); }
+      toast(d.name+" を解放!");
+    });
+    list.appendChild(row);
+  }
+}
+
+// ---------- 画面遷移 ----------
+function show(id){
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  $(id).classList.add("active");
+}
+function startGame(){
+  run = newRun();
+  statsDirty = true;
+  computeStatsIfDirty();
+  run.hp = S.maxHP;
+  show("game");
+  resize();
+  buildUpList();
+  initUW();
+  startWave();
+  syncHud();
+  inGame = true;
+  lastT = performance.now();
+  requestAnimationFrame(loop);
+}
+function gameOver(){
+  inGame = false;
+  meta.bestWave = Math.max(meta.bestWave, run.wave);
+  save();
+  $("overRes").innerHTML =
+    "到達ウェーブ: <b>W"+run.wave+"</b>(最高 W"+meta.bestWave+")<br>"+
+    "撃破数: "+run.kills+"<br>"+
+    '獲得コイン: <span class="c-coin">🪙'+fmt(Math.floor(run.coinsEarned))+"</span>";
+  show("over");
+  syncHome();
+}
+function quitGame(){
+  inGame = false;
+  meta.bestWave = Math.max(meta.bestWave, run.wave);
+  save();
+  show("home");
+  syncHome();
+}
+
+// ---------- イベント ----------
+$("btnStart").addEventListener("click", startGame);
+$("btnRetry").addEventListener("click", startGame);
+$("btnHome").addEventListener("click", ()=>{ show("home"); syncHome(); });
+$("btnQuit").addEventListener("click", ()=>{ if (confirm("バトルをやめてホームに戻る?(コインは保持)")) quitGame(); });
+$("btnWorkshop").addEventListener("click", ()=>{ buildWsList(); $("mWorkshop").classList.add("open"); });
+$("btnUW").addEventListener("click", ()=>{ buildUwShop(); $("mUW").classList.add("open"); });
+$("btnCheatHome").addEventListener("click", ()=>openCheat());
+$("btnCheatGame").addEventListener("click", ()=>openCheat());
+$("btnSpeed").addEventListener("click", ()=>{
+  speedMul = speedMul===1 ? 2 : (speedMul===2 ? 3 : 1);
+  $("btnSpeed").textContent = "▶×"+speedMul;
+});
+document.querySelectorAll("[data-close]").forEach(b=>{
+  b.addEventListener("click", ()=>$(b.dataset.close).classList.remove("open"));
+});
+document.querySelectorAll(".modal").forEach(m=>{
+  m.addEventListener("click", e=>{ if (e.target===m) m.classList.remove("open"); });
+});
+$("tabs").querySelectorAll("button").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    curTab = b.dataset.tab;
+    $("tabs").querySelectorAll("button").forEach(x=>x.classList.toggle("on", x===b));
+    buildUpList();
+  });
+});
+$("tabsWs").querySelectorAll("button").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    wsTab = b.dataset.tab;
+    $("tabsWs").querySelectorAll("button").forEach(x=>x.classList.toggle("on", x===b));
+    buildWsList();
+  });
+});
+
+// ---------- チート ----------
+function openCheat(){
+  $("chGod").classList.toggle("on", meta.cheat.god);
+  $("chOneShot").classList.toggle("on", meta.cheat.oneShot);
+  $("mCheat").classList.add("open");
+}
+function cheatDone(msg){ save(); syncHome(); if (run){ syncHud(); refreshUpButtons(); } toast(msg); }
+$("chCash").addEventListener("click", ()=>{ if(run) run.cash += 1e5; cheatDone(run?"💵 +100K":"バトル中のみ使えます"); });
+$("chCashBig").addEventListener("click", ()=>{ if(run) run.cash += 1e8; cheatDone(run?"💵 +100M":"バトル中のみ使えます"); });
+$("chCoin").addEventListener("click", ()=>{ meta.coins += 1e4; cheatDone("🪙 +10K"); });
+$("chCoinBig").addEventListener("click", ()=>{ meta.coins += 1e6; cheatDone("🪙 +1M"); });
+$("chGem").addEventListener("click", ()=>{ meta.gems += 1000; cheatDone("💎 +1,000"); });
+$("chHeal").addEventListener("click", ()=>{ if(run&&S) run.hp = S.maxHP; cheatDone("❤️ 全回復"); });
+$("chGod").addEventListener("click", ()=>{ meta.cheat.god = !meta.cheat.god; $("chGod").classList.toggle("on", meta.cheat.god); cheatDone("ゴッドモード: "+(meta.cheat.god?"ON":"OFF")); });
+$("chOneShot").addEventListener("click", ()=>{ meta.cheat.oneShot = !meta.cheat.oneShot; $("chOneShot").classList.toggle("on", meta.cheat.oneShot); cheatDone("一撃必殺: "+(meta.cheat.oneShot?"ON":"OFF")); });
+$("chWave").addEventListener("click", ()=>{
+  if (!run) { toast("バトル中のみ使えます"); return; }
+  run.enemies.length = 0; run.spawnQueue.length = 0; run.ebullets.length = 0;
+  run.wave += 10;
+  startWave();
+  cheatDone("⏩ W"+run.wave+" へジャンプ");
+});
+$("chUWAll").addEventListener("click", ()=>{
+  for (const d of UW_DEFS) meta.uw[d.id] = true;
+  if (run) initUW();
+  cheatDone("☄️ UW全解放!");
+});
+$("chReset").addEventListener("click", ()=>{
+  if (confirm("本当にセーブデータを消しますか?")){
+    localStorage.removeItem(SAVE_KEY);
+    location.reload();
+  }
+});
+
+// ---------- 初期化 ----------
+window.addEventListener("beforeunload", save);
+setInterval(save, 10000);
+resize();
+syncHome();
+</script>
+</body>
+</html>
